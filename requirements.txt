@@ -1,3 +1,7 @@
 torch
 torchvision
+torchinfo
 codecarbon
+scikit-learn
+pandas
+pillow
