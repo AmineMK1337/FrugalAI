@@ -5,3 +5,10 @@ codecarbon
 scikit-learn
 pandas
 pillow
+numpy
+matplotlib
+ptflops
+tqdm
+PyYAML
+notebook
+ipykernel
