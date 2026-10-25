@@ -1,92 +1,82 @@
 # FrugalAI
 
-This project is a compact proof-of-concept for building a lightweight, energy-aware image-classification pipeline. The goal is to explore how a pretrained CNN can be trained and then compressed with quantization to reduce model size and inference cost while keeping an eye on energy consumption and carbon footprint.
+Fine-tuning ResNet-18 on the HAM10000 skin-lesion dataset and benchmarking it on three fronts: diagnostic **performance**, computational **efficiency**, and **environmental** footprint.
 
-## What was done
+| Family | Metrics |
+|---|---|
+| Performance | Accuracy, Precision, Recall, Specificity, F1-Score, AUC (macro, weighted and per class) |
+| Efficiency | Size, FLOPs, Latency, Throughput, Memory |
+| Environment | Energy (kWh), CO₂e (kg) |
 
-The workspace contains a small end-to-end experiment around ResNet18 on a synthetic image dataset:
+## Repository layout
 
-- A dummy dataset generator creates train/validation/test folders with random RGB images.
-- A baseline model is trained using a pretrained ResNet18 backbone.
-- The trained model is evaluated and then compared against an INT8 quantized version.
-- Energy and carbon estimates are measured with CodeCarbon.
-- Results are exported as CSV files for comparison.
-
-This is intended as a practical frugal-AI experiment rather than a production dataset or final production model.
-
-## Project structure
-
-- `make_dummy_dataset.py`  
-  Generates a small synthetic dataset under `dataset/` so the pipeline can run without external data.
-
-- `train_baseline.py`  
-  Fine-tunes a pretrained `ResNet18` model on the generated data, saves the best checkpoint as `resnet18_baseline.pth`, and keeps the validation set for model selection.
-
-- `quantization_experiment.py`  
-  Runs the main compression benchmark. It compares FP32 vs INT8 quantized inference across:
-  - classification metrics
-  - model size and compression ratio
-  - latency / throughput
-  - estimated energy and CO2 emissions
-  - confusion matrices
-
-- `test_codecarbon.py`  
-  Verifies the CodeCarbon tracker on a synthetic inference run to estimate energy use and carbon output.
-
-- `requirements.txt`  
-  Lists the Python dependencies used by the project.
-
-- `dataset/`  
-  Contains generated train/validation/test folders used by the training and evaluation scripts.
-
-## Model and experiment flow
-
-1. Generate a synthetic dataset.
-2. Train a ResNet18 baseline.
-3. Run post-training quantization (INT8) on the model.
-4. Compare FP32 and quantized performance.
-5. Save CSV reports and confusion matrices.
-
-The experiment is designed to answer questions such as:
-
-- How much smaller is the quantized model?
-- Does accuracy drop significantly?
-- What is the latency improvement?
-- How much energy and carbon can be saved?
-
-## Notes about realism
-
-The generated dataset is intentionally random noise and not a meaningful real-world classification dataset. That is by design for a lightweight pipeline test.
-
-The scripts are therefore useful as a laboratory setup to validate the workflow, benchmarking logic, and computational cost analysis. They are not a substitute for a properly labeled dataset and real-world validation.
-
-## Prerequisites
-
-Install the required packages:
-
-```bash
-pip install -r requirements.txt
+```
+skin-lesion-classification/
+├── run_exp001.py          # fine-tunes ResNet-18 on HAM10000
+├── evaluation.ipynb       # all benchmarks, with plots in the cell outputs
+├── configs/baseline.yaml  # training hyperparameters
+├── src/ham10000/          # dataset, model, training and Grad-CAM code
+├── results/
+│   ├── baseline_resnet18/ # training history, metrics, confusion matrices, Grad-CAM
+│   └── metrics.json       # benchmark results exported by the notebook
+└── report.md              # written audit of the ResNet-18 run
 ```
 
-## Typical workflow
+## Setup
 
 ```bash
-python make_dummy_dataset.py
-python train_baseline.py
-python quantization_experiment.py
-python test_codecarbon.py
+cd skin-lesion-classification
+python -m venv venv
+venv\Scripts\activate          # Windows  (Linux/macOS: source venv/bin/activate)
+pip install -r requirements.txt   # also installs src/ham10000 as a package
 ```
 
-## Outputs
+### Data
 
-Depending on execution, the project can generate files such as:
+Download [HAM10000](https://doi.org/10.7910/DVN/DBW86T) and place it under `skin-lesion-classification/data/`:
 
-- `resnet18_baseline.pth`
-- `results_quantization.csv`
-- `confusion_matrix_fp32.csv`
-- `confusion_matrix_int8.csv`
-- `codecarbon_emissions.csv`
+```
+data/
+├── ham10000_metadata_2026-10-02.csv
+└── ISIC-images/            # the .jpg images
+```
 
-## Summary
+The original `HAM10000_images_part_1/` and `HAM10000_images_part_2/` folders are also recognised. If your metadata file has a different name, update `metadata_csv` in `configs/baseline.yaml` and `METADATA_CSV` in the notebook's first cell. `data/` is gitignored.
 
-This repository demonstrates a small frugal-AI workflow: train a strong baseline, compress it with quantization, and measure the tradeoff between model efficiency and predictive performance. The project is useful as a teaching tool, benchmarking starter, and quick experimentation environment for low-resource AI deployment.
+## Usage
+
+All commands run from `skin-lesion-classification/`.
+
+**1. Fine-tune**
+
+```bash
+python run_exp001.py
+```
+
+Trains for 10 epochs (Adam, lr 1e-4, batch 32, class-weighted cross-entropy, augmentation) on a lesion-level 80/20 split, and keeps the checkpoint with the lowest validation loss as `best_model.pth`. Training history, metrics and Grad-CAM maps go to `results/baseline_resnet18/`. Checkpoints are gitignored, so run this before the notebook.
+
+**2. Benchmark**
+
+Open `evaluation.ipynb` with the `venv` kernel and run all cells. It loads `best_model.pth`, evaluates the held-out test images, draws one figure per metric family, and exports everything to `results/metrics.json`.
+
+## Results
+
+Fine-tuned ResNet-18, 1,193 test images, CPU inference (AMD Ryzen 7 5800H).
+
+| Performance | | Efficiency | | Environment | |
+|---|---|---|---|---|---|
+| Accuracy | 76.1% | Parameters | 11.18 M (42.7 MB) | Energy | 0.57 Wh (2,052 J) |
+| Macro F1 | 0.658 | FLOPs | 3.65 GFLOPs / image | CO₂e | 0.32 g |
+| Macro recall | 0.758 | Latency (batch 1) | 30.9 ± 2.0 ms | Per image | 1.72 J, 0.27 mg CO₂e |
+| Macro specificity | 0.957 | Throughput (batch 32) | 40 images/s | Average power | 58 W |
+| Macro AUC | 0.961 | Peak memory (batch 1) | 49 MB | Grid intensity | 564 g CO₂e/kWh (Tunisia) |
+
+Latency and energy vary by roughly 10–15% between runs on a laptop CPU.
+
+**Caveat on the test split.** The notebook's test images are half of the 20% hold-out that training used as its validation set, and that set chose the best epoch. So the test scores are slightly optimistic. For a strictly unseen test set, retrain on the 80% split with a separate validation subset.
+
+## Credits
+
+The training code in `skin-lesion-classification/` is adapted from [sairaveena28/skin-lesion-classification](https://github.com/sairaveena28/skin-lesion-classification), which builds on [sararajabzadeh/ham10000-classifier](https://github.com/sararajabzadeh/ham10000-classifier). HAM10000: Tschandl, P., Rosendahl, C. & Kittler, H. *The HAM10000 dataset*, Sci. Data 5, 180161 (2018).
+
+Educational project, not a clinical tool.

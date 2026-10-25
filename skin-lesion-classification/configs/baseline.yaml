@@ -1,0 +1,24 @@
+seed: 42
+
+metadata_csv: "data/ham10000_metadata_2026-10-02.csv"
+data_dir: "data"
+
+# Data
+image_size: 224
+train_test_split: 0.8
+
+# Model
+model_name: "resnet18"
+num_classes: 7
+
+#Training
+batch_size: 32
+num_epochs: 10
+learning_rate: 0.0001
+optimizer: "adam"
+
+use_class_weights: true
+
+use_augmentation: true
+
+use_wandb: false

@@ -1,0 +1,14 @@
+{
+  "python_version": "3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 10:51:32) [MSC v.1944 64 bit (AMD64)]",
+  "torch_version": "2.11.0+cu128",
+  "torchvision_version": "0.26.0+cu128",
+  "cuda_available": true,
+  "cuda_version": "12.8",
+  "gpu_name": "NVIDIA GeForce RTX 4050 Laptop GPU",
+  "gpu_memory_mb": 6439.0,
+  "sklearn_version": "1.9.1",
+  "pandas_version": "3.0.6",
+  "matplotlib_version": "3.11.2",
+  "numpy_version": "2.5.2",
+  "platform": "win32"
+}

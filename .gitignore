@@ -1,10 +1,13 @@
-# Virtual environment
+# Virtual environments
 venv/
 .venv/
 
-# Python cache
+# Python cache & packaging
 __pycache__/
 *.py[cod]
+*.egg-info/
+build/
+dist/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -20,6 +23,13 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-#data
-dataset/
-skin-lesion-classification/data
+# Dataset (download HAM10000 separately, see README)
+skin-lesion-classification/data/
+
+# Model checkpoints (44 MB; regenerate with run_exp001.py)
+*.pth
+
+# Experiment tracking & logs
+wandb/
+emissions.csv
+*.log

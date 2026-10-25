@@ -1,0 +1,118 @@
+{
+  "performance": {
+    "accuracy": 0.7611,
+    "macro": {
+      "Precision": 0.6099,
+      "Recall (Sensitivity)": 0.7581,
+      "Specificity (OvR)": 0.9574,
+      "F1-Score": 0.658,
+      "ROC-AUC (OvR)": 0.9608
+    },
+    "weighted": {
+      "Precision": 0.8361,
+      "Recall (Sensitivity)": 0.7611,
+      "Specificity (OvR)": 0.9407,
+      "F1-Score": 0.7816,
+      "ROC-AUC (OvR)": 0.946
+    },
+    "per_class": {
+      "akiec": {
+        "Diagnosis": "Actinic Keratoses / Intraepithelial Carcinoma",
+        "Support": 24,
+        "Precision": 0.3774,
+        "Recall (Sensitivity)": 0.8333,
+        "Specificity (OvR)": 0.9718,
+        "F1-Score": 0.5195,
+        "ROC-AUC (OvR)": 0.9847
+      },
+      "bcc": {
+        "Diagnosis": "Basal Cell Carcinoma",
+        "Support": 59,
+        "Precision": 0.6389,
+        "Recall (Sensitivity)": 0.7797,
+        "Specificity (OvR)": 0.9771,
+        "F1-Score": 0.7023,
+        "ROC-AUC (OvR)": 0.981
+      },
+      "bkl": {
+        "Diagnosis": "Benign Keratosis-like Lesions",
+        "Support": 103,
+        "Precision": 0.5776,
+        "Recall (Sensitivity)": 0.6505,
+        "Specificity (OvR)": 0.955,
+        "F1-Score": 0.6119,
+        "ROC-AUC (OvR)": 0.9333
+      },
+      "df": {
+        "Diagnosis": "Dermatofibroma",
+        "Support": 11,
+        "Precision": 0.6,
+        "Recall (Sensitivity)": 0.5455,
+        "Specificity (OvR)": 0.9966,
+        "F1-Score": 0.5714,
+        "ROC-AUC (OvR)": 0.9663
+      },
+      "mel": {
+        "Diagnosis": "Melanoma",
+        "Support": 144,
+        "Precision": 0.438,
+        "Recall (Sensitivity)": 0.7847,
+        "Specificity (OvR)": 0.8618,
+        "F1-Score": 0.5622,
+        "ROC-AUC (OvR)": 0.9121
+      },
+      "nv": {
+        "Diagnosis": "Melanocytic Nevi",
+        "Support": 833,
+        "Precision": 0.9711,
+        "Recall (Sensitivity)": 0.7659,
+        "Specificity (OvR)": 0.9472,
+        "F1-Score": 0.8564,
+        "ROC-AUC (OvR)": 0.9483
+      },
+      "vasc": {
+        "Diagnosis": "Vascular Lesions",
+        "Support": 19,
+        "Precision": 0.6667,
+        "Recall (Sensitivity)": 0.9474,
+        "Specificity (OvR)": 0.9923,
+        "F1-Score": 0.7826,
+        "ROC-AUC (OvR)": 0.9995
+      }
+    }
+  },
+  "efficiency": {
+    "model_size": {
+      "total_params": 11180103,
+      "trainable_params": 11180103,
+      "file_size_mb": 42.72
+    },
+    "flops": {
+      "flops": 3649608718,
+      "flops_method": "ptflops"
+    },
+    "latency": {
+      "mean_ms": 38.175,
+      "std_ms": 2.992,
+      "runs": 100
+    },
+    "throughput": {
+      "images_per_sec": 39.73,
+      "batch_size": 32
+    },
+    "peak_memory": {
+      "peak_memory_mb": 0.01,
+      "device_type": "CPU (tracemalloc)"
+    }
+  },
+  "environment": {
+    "energy_kwh": 0.00057384,
+    "co2e_kg": 0.00032362
+  },
+  "metadata": {
+    "checkpoint": "best_model.pth",
+    "device": "cpu",
+    "split": "80 / 10 / 10 (lesion-wise, train / val / test)",
+    "test_samples": 1193
+  }
+}
