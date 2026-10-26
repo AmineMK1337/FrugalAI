@@ -24,6 +24,7 @@ dist/
 Thumbs.db
 
 # Dataset (download HAM10000 separately, see README)
+dataset/
 skin-lesion-classification/data/
 
 # Model checkpoints (44 MB; regenerate with run_exp001.py)

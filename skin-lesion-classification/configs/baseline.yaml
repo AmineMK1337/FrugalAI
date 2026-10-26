@@ -1,11 +1,12 @@
 seed: 42
 
-metadata_csv: "data/ham10000_metadata_2026-10-02.csv"
-data_dir: "data"
+metadata_csv: "../dataset/HAM10000_metadata"
+data_dir: "../dataset"
 
 # Data
 image_size: 224
-train_test_split: 0.8
+train_test_split: 0.8   # train fraction; the rest is split evenly into val and test
+num_workers: 4
 
 # Model
 model_name: "resnet18"

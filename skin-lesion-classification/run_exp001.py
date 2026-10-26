@@ -10,6 +10,7 @@ learning rate, batch size, split, or number of epochs.
 """
 import sys
 import os
+import argparse
 import json
 import time
 import random
@@ -314,6 +315,7 @@ def main():
             "optimizer": config.optimizer,
             "use_class_weights": config.use_class_weights,
             "use_augmentation": config.use_augmentation,
+            "augmentation": config.augmentation,
             "train_test_split": config.train_test_split,
             "metadata_csv": config.metadata_csv,
             "data_dir": config.data_dir,
@@ -323,4 +325,11 @@ def main():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Fine-tune ResNet-18 on HAM10000")
+    parser.add_argument("--config", default=CONFIG_PATH)
+    parser.add_argument("--results-dir", default=str(RESULTS_DIR))
+    args = parser.parse_args()
+    CONFIG_PATH = args.config
+    RESULTS_DIR = Path(args.results_dir)
+    GRADCAM_DIR = RESULTS_DIR / "gradcam"
     main()

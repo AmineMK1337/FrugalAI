@@ -10,6 +10,6 @@
   "use_class_weights": true,
   "use_augmentation": true,
   "train_test_split": 0.8,
-  "metadata_csv": "D:/miniproject/mini_project-lfs/HAM10000_metadata.csv",
-  "data_dir": "D:/miniproject/mini_project-lfs"
+  "metadata_csv": "../dataset/HAM10000_metadata",
+  "data_dir": "../dataset"
 }

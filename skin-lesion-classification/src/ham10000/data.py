@@ -86,23 +86,40 @@ class Ham10000Dataset(Dataset):
         return img, int(label)
         
 def build_dataloaders(config):
-    """Build train and val DataLoaders with a lesion-level split.
+    """Build train and val DataLoaders with a lesion-level 80/10/10 split.
 
     Splits on lesion_id (not image_id) so that multiple images of the same
-    lesion never appear in both train and val, which would leak information.
+    lesion never appear in more than one split, which would leak information.
+    The remaining 10% test split is left untouched for evaluation.ipynb.
     The split is seeded with config.seed for reproducibility. Training data
-    is augmented when config.use_augmentation is set; validation data always
-    uses a deterministic resize + normalize pipeline.
+    is augmented when config.use_augmentation is set (config.augmentation picks
+    "standard" or "strong"); validation data always uses a deterministic
+    resize + normalize pipeline.
 
     Returns:
         (train_loader, val_loader, class_to_idx)
     """
-    
+
+    if config.augmentation == "strong":
+        # Dermoscopy has no canonical orientation, so any rotation and both
+        # flips are label-preserving; colour jitter stays mild because colour
+        # is diagnostic.
+        augment = [
+            transforms.RandomRotation(degrees=180),
+            transforms.RandomResizedCrop(config.image_size, scale=(0.6, 1.0), ratio=(0.75, 1.33)),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomVerticalFlip(p=0.5),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.15, hue=0.02),
+        ]
+    else:
+        augment = [
+            transforms.RandomResizedCrop(config.image_size, scale=(0.8, 1.0)),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomRotation(degrees=20),
+            transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1),
+        ]
     train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(config.image_size, scale=(0.8, 1.0)),
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomRotation(degrees=20),
-        transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1),
+        *augment,
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                             std=[0.229, 0.224, 0.225]),
@@ -119,24 +136,22 @@ def build_dataloaders(config):
     val_ds   = Ham10000Dataset(config.metadata_csv, config.data_dir, transform=val_transform)
     
     lesion_ids = train_ds.data["lesion_id"].unique()
-    train_ids, val_ids = train_test_split(
-        lesion_ids,
-        train_size=config.train_test_split,
-        random_state=config.seed,
-    )
-    
-    lesion_ids = train_ds.data["lesion_id"].unique()
-    train_ids, val_ids = train_test_split(
+    train_ids, holdout_ids = train_test_split(
         lesion_ids, train_size=config.train_test_split, random_state=config.seed
     )
-    train_mask = train_ds.data["lesion_id"].isin(train_ids)
-    train_idx = train_ds.data.index[train_mask].tolist()
-    val_idx   = train_ds.data.index[~train_mask].tolist()
+    # The holdout is halved into val (checkpoint selection) and test (final
+    # evaluation in evaluation.ipynb, never seen during training).
+    val_ids, _test_ids = train_test_split(
+        holdout_ids, test_size=0.5, random_state=config.seed
+    )
+    train_idx = train_ds.data.index[train_ds.data["lesion_id"].isin(train_ids)].tolist()
+    val_idx   = train_ds.data.index[train_ds.data["lesion_id"].isin(val_ids)].tolist()
 
-    train_loader = DataLoader(Subset(train_ds, train_idx),
-                              batch_size=config.batch_size, shuffle=True)
-    val_loader   = DataLoader(Subset(val_ds, val_idx),
-                              batch_size=config.batch_size, shuffle=False)
+    loader_kwargs = dict(batch_size=config.batch_size, num_workers=config.num_workers,
+                         pin_memory=torch.cuda.is_available(),
+                         persistent_workers=config.num_workers > 0)
+    train_loader = DataLoader(Subset(train_ds, train_idx), shuffle=True, **loader_kwargs)
+    val_loader   = DataLoader(Subset(val_ds, val_idx), shuffle=False, **loader_kwargs)
     return train_loader, val_loader, train_ds.class_to_idx
 
 

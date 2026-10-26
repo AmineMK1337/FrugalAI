@@ -18,7 +18,9 @@ class Config:
     metadata_csv: str
     data_dir: str
     use_wandb: bool
-    
+    num_workers: int = 0
+    augmentation: str = "standard"  # "standard" or "strong"
+
 def load_config(path):
     """Load a YAML config file into a typed Config dataclass."""
     with open(path) as f:
