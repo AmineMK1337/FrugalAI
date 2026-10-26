@@ -1,0 +1,17 @@
+EXP-001 Classification Report
+Checkpoint: best_model.pth (epoch 8)
+============================================================
+
+              precision    recall  f1-score   support
+
+       akiec       0.56      0.67      0.61        33
+         bcc       0.82      0.63      0.71        57
+         bkl       0.61      0.82      0.70       115
+          df       0.88      0.50      0.64        14
+         mel       0.51      0.73      0.60       126
+          nv       0.94      0.82      0.88       639
+        vasc       0.91      0.95      0.93        22
+
+    accuracy                           0.79      1006
+   macro avg       0.75      0.73      0.72      1006
+weighted avg       0.83      0.79      0.80      1006

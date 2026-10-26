@@ -1,0 +1,14 @@
+{
+  "python_version": "3.14.0 (tags/v3.14.0:ebf955d, Oct  7 2025, 10:15:03) [MSC v.1944 64 bit (AMD64)]",
+  "torch_version": "2.12.0+cu126",
+  "torchvision_version": "0.27.0+cu126",
+  "cuda_available": true,
+  "cuda_version": "12.6",
+  "gpu_name": "NVIDIA GeForce GTX 1650",
+  "gpu_memory_mb": 4295.0,
+  "sklearn_version": "1.8.0",
+  "pandas_version": "3.0.3",
+  "matplotlib_version": "3.10.9",
+  "numpy_version": "2.4.6",
+  "platform": "win32"
+}

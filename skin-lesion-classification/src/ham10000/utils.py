@@ -20,6 +20,7 @@ class Config:
     use_wandb: bool
     num_workers: int = 0
     augmentation: str = "standard"  # "standard" or "strong"
+    lr_schedule: str = "constant"   # "constant" or "cosine"
 
 def load_config(path):
     """Load a YAML config file into a typed Config dataclass."""

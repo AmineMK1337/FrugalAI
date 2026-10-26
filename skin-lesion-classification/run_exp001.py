@@ -105,6 +105,10 @@ def main():
         criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     print(f"  Optimizer: Adam, lr={config.learning_rate}")
+    # Cosine annealing decays the lr smoothly to ~0 by the last epoch, so late epochs settle instead of oscillating
+    scheduler = (torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.num_epochs)
+                 if config.lr_schedule == "cosine" else None)
+    print(f"  LR schedule: {config.lr_schedule}")
     print(f"  Loss: CrossEntropyLoss (weighted={config.use_class_weights})")
 
     # ── 4. Training loop with history recording ──────────────
@@ -120,9 +124,12 @@ def main():
 
     for epoch in range(config.num_epochs):
         epoch_start = time.time()
+        epoch_lr = optimizer.param_groups[0]["lr"]
 
         # Use the original train_one_epoch and validate functions
         train_loss = train_one_epoch(model, train_loader, criterion, optimizer, device)
+        if scheduler is not None:
+            scheduler.step()
         val_loss, val_acc = validate(model, val_loader, criterion, device)
 
         epoch_duration = time.time() - epoch_start
@@ -132,6 +139,7 @@ def main():
 
         epoch_record = {
             "epoch": epoch + 1,
+            "lr": epoch_lr,
             "train_loss": round(train_loss, 6),
             "val_loss": round(val_loss, 6),
             "train_acc": round(train_acc, 6),
@@ -143,7 +151,7 @@ def main():
         print(f'Epoch {epoch+1}/{config.num_epochs} | '
               f'train_loss={train_loss:.4f} | '
               f'val_loss={val_loss:.4f} | val_acc={val_acc:.4f} | '
-              f'train_acc={train_acc:.4f} | '
+              f'train_acc={train_acc:.4f} | lr={epoch_lr:.2e} | '
               f'time={epoch_duration:.1f}s')
 
         if val_loss < best_val_loss:
@@ -316,6 +324,7 @@ def main():
             "use_class_weights": config.use_class_weights,
             "use_augmentation": config.use_augmentation,
             "augmentation": config.augmentation,
+            "lr_schedule": config.lr_schedule,
             "train_test_split": config.train_test_split,
             "metadata_csv": config.metadata_csv,
             "data_dir": config.data_dir,
