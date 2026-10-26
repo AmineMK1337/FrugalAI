@@ -121,7 +121,7 @@ def train(config, train_loader, val_loader):
         
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            torch.save(model.state_dict(), 'best_model.pth')
+            torch.save(model.state_dict(), 'resnet18_baseline.pth')
             print(f'Best model saved with val_loss={val_loss:.4f}')
     
     if config.use_wandb:

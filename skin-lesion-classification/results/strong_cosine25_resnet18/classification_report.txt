@@ -1,5 +1,5 @@
-EXP-001 Classification Report
-Checkpoint: best_model.pth (epoch 25)
+Classification Report
+Checkpoint: resnet18_baseline.pth (epoch 25)
 ============================================================
 
               precision    recall  f1-score   support

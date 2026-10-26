@@ -1,12 +1,14 @@
 """
-EXP-001: ResNet18 HAM10000 Baseline — Complete Runner
-=====================================================
-This script orchestrates training, evaluation, and Grad-CAM
-using the original repository code, adding only recording/saving
-of per-epoch metrics and experiment outputs.
+Fine-tune an ImageNet-pretrained ResNet-18 on HAM10000
+======================================================
+1. Builds the lesion-level 80/10/10 split (train / val / test; test is left for evaluation.ipynb).
+2. Fine-tunes ResNet-18 with the settings in the YAML config (augmentation, epochs, lr schedule, ...).
+3. Saves the lowest-val-loss epoch as resnet18_baseline.pth, in the results dir and in the working directory.
+4. Writes val metrics, confusion matrices, training history and Grad-CAM maps to the results dir.
 
-NO changes to: model architecture, augmentation, loss, optimizer,
-learning rate, batch size, split, or number of epochs.
+Usage:
+  python finetune_resnet18.py                       # model D, the chosen setup (see comparaison.md)
+  python finetune_resnet18.py --config configs/<name>.yaml --results-dir results/<name>
 """
 import sys
 import os
@@ -31,8 +33,10 @@ from ham10000.models import build_model
 from ham10000.train import set_seed, train_one_epoch, validate
 
 # ── Configuration ────────────────────────────────────────────
-CONFIG_PATH = "configs/baseline.yaml"
-RESULTS_DIR = Path("results/baseline_resnet18")
+# Default = model D (strong augmentation, 25 epochs, cosine lr), the chosen model; see comparaison.md
+CONFIG_PATH = "configs/strong_cosine25.yaml"
+RESULTS_DIR = Path("results/strong_cosine25_resnet18")
+CHECKPOINT_NAME = "resnet18_baseline.pth"
 GRADCAM_DIR = RESULTS_DIR / "gradcam"
 
 def main():
@@ -63,7 +67,7 @@ def main():
         "platform": sys.platform,
     }
     print("=" * 60)
-    print("EXP-001 ENVIRONMENT")
+    print("ENVIRONMENT")
     print("=" * 60)
     for k, v in env_info.items():
         print(f"  {k}: {v}")
@@ -116,7 +120,7 @@ def main():
     print("TRAINING")
     print("=" * 60)
 
-    checkpoint_path = RESULTS_DIR / "best_model.pth"
+    checkpoint_path = RESULTS_DIR / CHECKPOINT_NAME
     history = []
     best_val_loss = float('inf')
     best_epoch = -1
@@ -158,8 +162,8 @@ def main():
             best_val_loss = val_loss
             best_epoch = epoch + 1
             torch.save(model.state_dict(), str(checkpoint_path))
-            # Also save to repo root for evaluate.py/gradcam.py compatibility
-            torch.save(model.state_dict(), 'best_model.pth')
+            # Also save in the working directory (skin-lesion-classification/), where evaluation.ipynb loads it
+            torch.save(model.state_dict(), CHECKPOINT_NAME)
             print(f'  -> Best model saved (val_loss={val_loss:.4f})')
 
     total_train_time = time.time() - total_train_start
@@ -169,7 +173,7 @@ def main():
 
     # Save training history
     training_summary = {
-        "experiment_id": "EXP-001",
+        "experiment_id": RESULTS_DIR.name,
         "total_training_time_sec": round(total_train_time, 1),
         "best_epoch": best_epoch,
         "best_val_loss": round(best_val_loss, 6),
@@ -203,8 +207,8 @@ def main():
     # Save classification report
     report_path = RESULTS_DIR / "classification_report.txt"
     with open(report_path, "w") as f:
-        f.write(f"EXP-001 Classification Report\n")
-        f.write(f"Checkpoint: best_model.pth (epoch {best_epoch})\n")
+        f.write(f"{RESULTS_DIR.name} Classification Report\n")
+        f.write(f"Checkpoint: {CHECKPOINT_NAME} (epoch {best_epoch})\n")
         f.write(f"{'=' * 60}\n\n")
         f.write(report_text)
 
@@ -267,7 +271,7 @@ def main():
 
     # ── 7. Final summary ─────────────────────────────────────
     print("\n" + "=" * 60)
-    print("EXP-001 COMPLETE")
+    print("FINE-TUNING COMPLETE")
     print("=" * 60)
 
     accuracy = report_dict.get("accuracy", 0)
@@ -302,7 +306,7 @@ def main():
     # Save final metrics
     with open(RESULTS_DIR / "final_metrics.json", "w") as f:
         json.dump({
-            "experiment_id": "EXP-001",
+            "experiment_id": RESULTS_DIR.name,
             "final_metrics": final_metrics,
             "per_class": {cls: report_dict[cls] for cls in class_names},
             "best_epoch": best_epoch,

@@ -95,7 +95,7 @@ def run_gradcam_on_samples(model, samples, idx_to_class, prefix, device):
 def main():
     parser = argparse.ArgumentParser(description="Grad-CAM for HAM10000 classifier")
     parser.add_argument("--config", type=str, required=True)
-    parser.add_argument("--checkpoint", type=str, default="best_model.pth")
+    parser.add_argument("--checkpoint", type=str, default="resnet18_baseline.pth")
     args = parser.parse_args()
     
     config = load_config(args.config)

@@ -55,5 +55,5 @@
   },
   "best_epoch": 25,
   "total_training_time_sec": 1903.8,
-  "checkpoint_path": "results\\strong_cosine25_resnet18\\best_model.pth"
+  "checkpoint_path": "results\\strong_cosine25_resnet18\\resnet18_baseline.pth"
 }

@@ -1,74 +1,74 @@
 {
   "performance": {
-    "accuracy": 0.7903,
+    "accuracy": 0.8145,
     "macro": {
-      "Precision": 0.648,
-      "Recall (Sensitivity)": 0.6758,
-      "Specificity (OvR)": 0.956,
-      "F1-Score": 0.6536,
-      "ROC-AUC (OvR)": 0.9446
+      "Precision": 0.6964,
+      "Recall (Sensitivity)": 0.6987,
+      "Specificity (OvR)": 0.9609,
+      "F1-Score": 0.6862,
+      "ROC-AUC (OvR)": 0.9531
     },
     "weighted": {
-      "Precision": 0.8135,
-      "Recall (Sensitivity)": 0.7903,
-      "Specificity (OvR)": 0.9018,
-      "F1-Score": 0.7978,
-      "ROC-AUC (OvR)": 0.9424
+      "Precision": 0.8286,
+      "Recall (Sensitivity)": 0.8145,
+      "Specificity (OvR)": 0.912,
+      "F1-Score": 0.819,
+      "ROC-AUC (OvR)": 0.9572
     },
     "per_class": {
       "akiec": {
         "Diagnosis": "Actinic Keratoses / Intraepithelial Carcinoma",
         "Support": 35,
-        "Precision": 0.5526,
+        "Precision": 0.5122,
         "Recall (Sensitivity)": 0.6,
-        "Specificity (OvR)": 0.983,
-        "F1-Score": 0.5753,
-        "ROC-AUC (OvR)": 0.9247
+        "Specificity (OvR)": 0.98,
+        "F1-Score": 0.5526,
+        "ROC-AUC (OvR)": 0.9625
       },
       "bcc": {
         "Diagnosis": "Basal Cell Carcinoma",
         "Support": 75,
-        "Precision": 0.7297,
-        "Recall (Sensitivity)": 0.72,
+        "Precision": 0.7403,
+        "Recall (Sensitivity)": 0.76,
         "Specificity (OvR)": 0.9792,
-        "F1-Score": 0.7248,
-        "ROC-AUC (OvR)": 0.9718
+        "F1-Score": 0.75,
+        "ROC-AUC (OvR)": 0.982
       },
       "bkl": {
         "Diagnosis": "Benign Keratosis-like Lesions",
         "Support": 129,
-        "Precision": 0.7217,
-        "Recall (Sensitivity)": 0.6434,
-        "Specificity (OvR)": 0.9647,
-        "F1-Score": 0.6803,
-        "ROC-AUC (OvR)": 0.9324
+        "Precision": 0.7016,
+        "Recall (Sensitivity)": 0.6744,
+        "Specificity (OvR)": 0.9592,
+        "F1-Score": 0.6877,
+        "ROC-AUC (OvR)": 0.9448
       },
       "df": {
         "Diagnosis": "Dermatofibroma",
         "Support": 20,
-        "Precision": 0.5,
-        "Recall (Sensitivity)": 0.35,
-        "Specificity (OvR)": 0.9931,
-        "F1-Score": 0.4118,
-        "ROC-AUC (OvR)": 0.9478
+        "Precision": 0.8182,
+        "Recall (Sensitivity)": 0.45,
+        "Specificity (OvR)": 0.998,
+        "F1-Score": 0.5806,
+        "ROC-AUC (OvR)": 0.9479
       },
       "mel": {
         "Diagnosis": "Melanoma",
         "Support": 99,
-        "Precision": 0.4423,
-        "Recall (Sensitivity)": 0.697,
-        "Specificity (OvR)": 0.9071,
-        "F1-Score": 0.5412,
-        "ROC-AUC (OvR)": 0.9065
+        "Precision": 0.5039,
+        "Recall (Sensitivity)": 0.6566,
+        "Specificity (OvR)": 0.9316,
+        "F1-Score": 0.5702,
+        "ROC-AUC (OvR)": 0.9138
       },
       "nv": {
         "Diagnosis": "Melanocytic Nevi",
         "Support": 663,
-        "Precision": 0.9226,
-        "Recall (Sensitivity)": 0.8627,
-        "Specificity (OvR)": 0.871,
-        "F1-Score": 0.8917,
-        "ROC-AUC (OvR)": 0.9464
+        "Precision": 0.9323,
+        "Recall (Sensitivity)": 0.8929,
+        "Specificity (OvR)": 0.8844,
+        "F1-Score": 0.9122,
+        "ROC-AUC (OvR)": 0.9633
       },
       "vasc": {
         "Diagnosis": "Vascular Lesions",
@@ -77,7 +77,7 @@
         "Recall (Sensitivity)": 0.8571,
         "Specificity (OvR)": 0.9941,
         "F1-Score": 0.75,
-        "ROC-AUC (OvR)": 0.9829
+        "ROC-AUC (OvR)": 0.9574
       }
     }
   },
@@ -92,49 +92,49 @@
       "flops_method": "ptflops"
     },
     "latency": {
-      "mean_ms": 4.026,
-      "std_ms": 0.331,
+      "mean_ms": 4.028,
+      "std_ms": 0.36,
       "runs": 100
     },
     "batch_sweep": [
       {
         "batch_size": 1,
-        "latency_ms": 4.026,
-        "latency_std_ms": 0.331,
-        "throughput_ips": 248.368,
+        "latency_ms": 4.028,
+        "latency_std_ms": 0.36,
+        "throughput_ips": 248.247,
         "peak_memory_mb": 68.74
       },
       {
         "batch_size": 8,
-        "latency_ms": 16.401,
-        "latency_std_ms": 0.561,
-        "throughput_ips": 487.762,
+        "latency_ms": 17.266,
+        "latency_std_ms": 1.236,
+        "throughput_ips": 463.33,
         "peak_memory_mb": 96.279
       },
       {
         "batch_size": 16,
-        "latency_ms": 23.609,
-        "latency_std_ms": 0.641,
-        "throughput_ips": 677.721,
+        "latency_ms": 23.67,
+        "latency_std_ms": 0.841,
+        "throughput_ips": 675.969,
         "peak_memory_mb": 156.56
       },
       {
         "batch_size": 32,
-        "latency_ms": 46.088,
-        "latency_std_ms": 0.824,
-        "throughput_ips": 694.325,
+        "latency_ms": 45.232,
+        "latency_std_ms": 1.328,
+        "throughput_ips": 707.466,
         "peak_memory_mb": 269.873
       },
       {
         "batch_size": 64,
-        "latency_ms": 88.165,
-        "latency_std_ms": 1.093,
-        "throughput_ips": 725.913,
+        "latency_ms": 88.387,
+        "latency_std_ms": 0.908,
+        "throughput_ips": 724.092,
         "peak_memory_mb": 497.435
       }
     ],
     "throughput": {
-      "images_per_sec": 694.33,
+      "images_per_sec": 707.47,
       "batch_size": 32
     },
     "peak_memory": {
@@ -143,18 +143,18 @@
     }
   },
   "environment": {
-    "energy_kwh": 0.00021697,
-    "co2e_kg": 0.00012236,
+    "energy_kwh": 0.00019498,
+    "co2e_kg": 0.00010996,
     "energy_by_component_kwh": {
-      "CPU": 0.00013941,
-      "RAM": 2.935e-05,
-      "GPU": 4.821e-05
+      "CPU": 0.00011793,
+      "RAM": 2.922e-05,
+      "GPU": 4.783e-05
     },
     "carbon_intensity_g_per_kwh": 564.0,
-    "duration_s": 11.39
+    "duration_s": 11.17
   },
   "metadata": {
-    "checkpoint": "best_model.pth",
+    "checkpoint": "resnet18_baseline.pth",
     "device": "cuda",
     "split": "80 / 10 / 10 (lesion-wise, train / val / test)",
     "test_samples": 1035

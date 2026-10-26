@@ -27,7 +27,7 @@ Thumbs.db
 dataset/
 skin-lesion-classification/data/
 
-# Model checkpoints (44 MB; regenerate with run_exp001.py)
+# Model checkpoints (44 MB; regenerate with finetune_resnet18.py)
 *.pth
 
 # Experiment tracking & logs

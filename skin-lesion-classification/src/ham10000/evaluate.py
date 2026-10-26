@@ -48,7 +48,7 @@ def save_confusion_matrix(all_labels, all_preds, class_names, path, normalize=No
 def main():
     parser = argparse.ArgumentParser(description='Evaluate HAM10000 Classifier')
     parser.add_argument('--config', type=str, required=True)
-    parser.add_argument('--checkpoint', type=str, default="best_model.pth")
+    parser.add_argument('--checkpoint', type=str, default="resnet18_baseline.pth")
     args = parser.parse_args()
     
     config = load_config(args.config)

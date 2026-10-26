@@ -85,7 +85,7 @@ The extra training is a one-off cost. A model scores thousands of images over it
 
 ## Recommendation
 
-**Use run D** (`configs/strong_cosine25.yaml`, checkpoint `skin-lesion-classification/results/strong_cosine25_resnet18/best_model.pth`) as the default model.
+**Use run D** (`configs/strong_cosine25.yaml`, checkpoint `skin-lesion-classification/results/strong_cosine25_resnet18/resnet18_baseline.pth`) as the default model. *Adopted: D is now the default for `finetune_resnet18.py`, `resnet18_baseline.pth` and `evaluation.ipynb`.*
 
 One trade-off to be aware of: **D finds slightly fewer melanomas than A.** Melanoma recall is 65.7% vs 69.7%: 65 of 99 test melanomas caught, against 69. Melanoma precision and F1 are higher, so D makes fewer false melanoma alarms. If missing a melanoma is the costliest error in your use case, its decision threshold could be tuned to trade some precision back for recall.
 
