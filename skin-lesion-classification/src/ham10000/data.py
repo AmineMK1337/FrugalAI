@@ -84,7 +84,53 @@ class Ham10000Dataset(Dataset):
         label = self.class_to_idx[row['dx']]
         
         return img, int(label)
-        
+
+
+def eval_transform(config):
+    """Deterministic resize + normalize pipeline used for val and test."""
+    return transforms.Compose([
+        transforms.Resize((config.image_size, config.image_size)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                            std=[0.229, 0.224, 0.225]),
+    ])
+
+
+def lesion_split(data, config):
+    """Return (train_idx, val_idx, test_idx) row indices of the lesion-level 80/10/10 split.
+
+    The holdout left after the train split is halved into val (checkpoint
+    selection) and test (final evaluation, never seen during training).
+    """
+    lesion_ids = data["lesion_id"].unique()
+    train_ids, holdout_ids = train_test_split(
+        lesion_ids, train_size=config.train_test_split, random_state=config.seed
+    )
+    val_ids, test_ids = train_test_split(
+        holdout_ids, test_size=0.5, random_state=config.seed
+    )
+    def rows(ids):
+        return data.index[data["lesion_id"].isin(ids)].tolist()
+    return rows(train_ids), rows(val_ids), rows(test_ids)
+
+
+def build_test_loader(config, batch_size=None, num_workers=0):
+    """Build the test DataLoader: no augmentation, no shuffling.
+
+    Uses the same lesion_split as build_dataloaders, so it is exactly the
+    10% of lesions that training never saw.
+
+    Returns:
+        (test_loader, test_df, class_to_idx) where test_df holds the test
+        rows of the metadata in loader order.
+    """
+    test_ds = Ham10000Dataset(config.metadata_csv, config.data_dir, transform=eval_transform(config))
+    _, _, test_idx = lesion_split(test_ds.data, config)
+    test_loader = DataLoader(Subset(test_ds, test_idx), batch_size=batch_size or config.batch_size,
+                             shuffle=False, num_workers=num_workers)
+    return test_loader, test_ds.data.loc[test_idx].reset_index(drop=True), test_ds.class_to_idx
+
+
 def build_dataloaders(config):
     """Build train and val DataLoaders with a lesion-level 80/10/10 split.
 
@@ -125,27 +171,12 @@ def build_dataloaders(config):
                             std=[0.229, 0.224, 0.225]),
     ])
 
-    val_transform = transforms.Compose([
-        transforms.Resize((config.image_size, config.image_size)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                            std=[0.229, 0.224, 0.225]),
-    ])
+    val_transform = eval_transform(config)
     chosen_train_transform = train_transform if config.use_augmentation else val_transform
     train_ds = Ham10000Dataset(config.metadata_csv, config.data_dir, transform=chosen_train_transform)
     val_ds   = Ham10000Dataset(config.metadata_csv, config.data_dir, transform=val_transform)
-    
-    lesion_ids = train_ds.data["lesion_id"].unique()
-    train_ids, holdout_ids = train_test_split(
-        lesion_ids, train_size=config.train_test_split, random_state=config.seed
-    )
-    # The holdout is halved into val (checkpoint selection) and test (final
-    # evaluation in evaluation.ipynb, never seen during training).
-    val_ids, _test_ids = train_test_split(
-        holdout_ids, test_size=0.5, random_state=config.seed
-    )
-    train_idx = train_ds.data.index[train_ds.data["lesion_id"].isin(train_ids)].tolist()
-    val_idx   = train_ds.data.index[train_ds.data["lesion_id"].isin(val_ids)].tolist()
+
+    train_idx, val_idx, _test_idx = lesion_split(train_ds.data, config)
 
     loader_kwargs = dict(batch_size=config.batch_size, num_workers=config.num_workers,
                          pin_memory=torch.cuda.is_available(),
