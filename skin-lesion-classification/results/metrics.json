@@ -92,70 +92,70 @@
       "flops_method": "ptflops"
     },
     "latency": {
-      "mean_ms": 4.028,
-      "std_ms": 0.36,
+      "mean_ms": 33.163,
+      "std_ms": 4.876,
       "runs": 100
     },
     "batch_sweep": [
       {
         "batch_size": 1,
-        "latency_ms": 4.028,
-        "latency_std_ms": 0.36,
-        "throughput_ips": 248.247,
-        "peak_memory_mb": 68.74
+        "latency_ms": 33.163,
+        "latency_std_ms": 4.876,
+        "throughput_ips": 30.154,
+        "peak_memory_mb": 49.385
       },
       {
         "batch_size": 8,
-        "latency_ms": 17.266,
-        "latency_std_ms": 1.236,
-        "throughput_ips": 463.33,
+        "latency_ms": 184.92,
+        "latency_std_ms": 8.643,
+        "throughput_ips": 43.262,
         "peak_memory_mb": 96.279
       },
       {
         "batch_size": 16,
-        "latency_ms": 23.67,
-        "latency_std_ms": 0.841,
-        "throughput_ips": 675.969,
-        "peak_memory_mb": 156.56
+        "latency_ms": 403.612,
+        "latency_std_ms": 27.605,
+        "throughput_ips": 39.642,
+        "peak_memory_mb": 149.873
       },
       {
         "batch_size": 32,
-        "latency_ms": 45.232,
-        "latency_std_ms": 1.328,
-        "throughput_ips": 707.466,
-        "peak_memory_mb": 269.873
+        "latency_ms": 811.95,
+        "latency_std_ms": 33.146,
+        "throughput_ips": 39.411,
+        "peak_memory_mb": 257.06
       },
       {
         "batch_size": 64,
-        "latency_ms": 88.387,
-        "latency_std_ms": 0.908,
-        "throughput_ips": 724.092,
-        "peak_memory_mb": 497.435
+        "latency_ms": 1605.913,
+        "latency_std_ms": 70.427,
+        "throughput_ips": 39.853,
+        "peak_memory_mb": 471.435
       }
     ],
     "throughput": {
-      "images_per_sec": 707.47,
+      "images_per_sec": 39.41,
       "batch_size": 32
     },
     "peak_memory": {
-      "peak_memory_mb": 68.74,
-      "device_type": "GPU (CUDA allocator)"
+      "peak_memory_mb": 49.38,
+      "device_type": "CPU (torch profiler)"
     }
   },
   "environment": {
-    "energy_kwh": 0.00019498,
-    "co2e_kg": 0.00010996,
+    "energy_kwh": 0.00073178,
+    "co2e_kg": 0.00041269,
     "energy_by_component_kwh": {
-      "CPU": 0.00011793,
-      "RAM": 2.922e-05,
-      "GPU": 4.783e-05
+      "CPU": 0.00051969,
+      "RAM": 0.00012813,
+      "GPU": 8.396e-05
     },
     "carbon_intensity_g_per_kwh": 564.0,
-    "duration_s": 11.17
+    "duration_s": 48.24
   },
   "metadata": {
     "checkpoint": "resnet18_baseline.pth",
-    "device": "cuda",
+    "device": "cpu",
     "split": "80 / 10 / 10 (lesion-wise, train / val / test)",
     "test_samples": 1035
   }
