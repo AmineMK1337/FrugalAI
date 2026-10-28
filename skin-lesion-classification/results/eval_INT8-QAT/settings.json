@@ -1,0 +1,31 @@
+{
+  "timestamp_utc": "2026-10-28T00:14:05+00:00",
+  "model_label": "INT8-QAT",
+  "model_path": "results/qat_int8/resnet18_qat_int8.pt",
+  "model_sha256": "815cdd774d112648bf9c8635d1c36257875f8bf6a3c08ba3a6fe8f77138586cb",
+  "config_path": "configs/strong_cosine25.yaml",
+  "test_split_csv": "results/test_split.csv",
+  "batch_size": 32,
+  "device": "cpu",
+  "quantized_engine": "onednn",
+  "num_threads": 4,
+  "num_interop_threads": 8,
+  "run_energy": true,
+  "cpu": "AMD Ryzen 7 5800H with Radeon Graphics",
+  "cpu_logical_cores": 16,
+  "ram_gb": 15.345375061035156,
+  "os": "Windows-11-10.0.26300-SP0",
+  "git_commit": "b34a7499147723046453a969e85e5459e3252031",
+  "versions": {
+    "python": "3.14.0",
+    "torch": "2.12.0+cu126",
+    "torchvision": "0.27.0+cu126",
+    "numpy": "2.4.6",
+    "pandas": "3.0.3",
+    "scikit-learn": "1.8.0",
+    "matplotlib": "3.10.9",
+    "ptflops": "0.7.5",
+    "codecarbon": "3.3.1",
+    "psutil": "7.2.2"
+  }
+}

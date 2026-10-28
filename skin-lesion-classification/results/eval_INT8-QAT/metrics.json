@@ -1,0 +1,198 @@
+{
+  "model_label": "INT8-QAT",
+  "model_path": "results/qat_int8/resnet18_qat_int8.pt",
+  "test_images": 1035,
+  "performance": {
+    "accuracy": 0.808695652173913,
+    "balanced_accuracy": 0.6959748045149646,
+    "macro_precision": 0.6813031174712402,
+    "macro_recall": 0.6959748045149646,
+    "macro_f1": 0.6748090878402326,
+    "macro_specificity": 0.9617213840501647,
+    "macro_auc_ovr": 0.9547332354205024,
+    "ci95": {
+      "accuracy": [
+        0.7845169082125604,
+        0.8328502415458937
+      ],
+      "macro_f1": [
+        0.6170924285347857,
+        0.7226572519017731
+      ],
+      "macro_auc_ovr": [
+        0.9413446567151692,
+        0.9662576421968079
+      ]
+    },
+    "bootstrap_resamples": 1000,
+    "auc_resamples_skipped": 0
+  },
+  "per_class": {
+    "akiec": {
+      "precision": 0.46938775510204084,
+      "recall": 0.6571428571428571,
+      "specificity": 0.974,
+      "f1": 0.5476190476190477,
+      "support": 35
+    },
+    "bcc": {
+      "precision": 0.7236842105263158,
+      "recall": 0.7333333333333333,
+      "specificity": 0.978125,
+      "f1": 0.7284768211920529,
+      "support": 75
+    },
+    "bkl": {
+      "precision": 0.7142857142857143,
+      "recall": 0.6201550387596899,
+      "specificity": 0.9646799116997793,
+      "f1": 0.6639004149377593,
+      "support": 129
+    },
+    "df": {
+      "precision": 0.7272727272727273,
+      "recall": 0.4,
+      "specificity": 0.9970443349753695,
+      "f1": 0.5161290322580645,
+      "support": 20
+    },
+    "mel": {
+      "precision": 0.4863013698630137,
+      "recall": 0.7171717171717171,
+      "specificity": 0.9198717948717948,
+      "f1": 0.5795918367346938,
+      "support": 99
+    },
+    "nv": {
+      "precision": 0.9423076923076923,
+      "recall": 0.8868778280542986,
+      "specificity": 0.9032258064516129,
+      "f1": 0.9137529137529138,
+      "support": 663
+    },
+    "vasc": {
+      "precision": 0.7058823529411765,
+      "recall": 0.8571428571428571,
+      "specificity": 0.9951028403525954,
+      "f1": 0.7741935483870968,
+      "support": 14
+    }
+  },
+  "confusion_matrix": {
+    "labels": [
+      "akiec",
+      "bcc",
+      "bkl",
+      "df",
+      "mel",
+      "nv",
+      "vasc"
+    ],
+    "counts": [
+      [
+        23,
+        1,
+        7,
+        0,
+        3,
+        1,
+        0
+      ],
+      [
+        8,
+        55,
+        4,
+        0,
+        5,
+        2,
+        1
+      ],
+      [
+        13,
+        6,
+        80,
+        0,
+        16,
+        14,
+        0
+      ],
+      [
+        1,
+        6,
+        1,
+        8,
+        4,
+        0,
+        0
+      ],
+      [
+        2,
+        1,
+        5,
+        1,
+        71,
+        18,
+        1
+      ],
+      [
+        2,
+        7,
+        14,
+        2,
+        47,
+        588,
+        3
+      ],
+      [
+        0,
+        0,
+        1,
+        0,
+        0,
+        1,
+        12
+      ]
+    ]
+  },
+  "efficiency": {
+    "model_size_mb": 10.79748821258545,
+    "gmacs": 1.824804359,
+    "gmacs_note": "FP32 architecture count: quantization changes the precision of the operations, not their number",
+    "latency_bs1_ms": {
+      "median": 12.479800003347918,
+      "p95": 13.084115006495267,
+      "mean": 12.568147500278428,
+      "runs": 200,
+      "warmup": 30
+    },
+    "throughput_bs32_ips": {
+      "images_per_s": 100.63588988435616,
+      "batch_size": 32,
+      "runs": 20
+    },
+    "memory_rss_mb": {
+      "idle": 973.2109375,
+      "peak_bs1": 973.59765625,
+      "peak_bs32": 964.921875
+    }
+  },
+  "energy": {
+    "duration_s": 60.19112020000466,
+    "images": 6039,
+    "cpu_kwh": 0.000744639208334,
+    "ram_kwh": 0.00016693557333338608,
+    "cpu_ram_kwh": 0.000911574781667386,
+    "gpu_kwh_excluded": 5.1891152624000333e-05,
+    "co2e_kg": 0.0005140880675700124,
+    "wh_per_1000_images": 0.15094796848275974,
+    "cpu_wh_per_1000_images": 0.12330505188508031,
+    "ram_wh_per_1000_images": 0.02764291659767943,
+    "g_co2e_per_1000_images": 0.08512801251366327,
+    "carbon_intensity_g_per_kwh": 563.956,
+    "country": "Tunisia",
+    "cpu_model": "AMD Ryzen 7 5800H with Radeon Graphics",
+    "cpu_power_mode": "windows_emi",
+    "cpu_power_source": "measured",
+    "tracking_mode": "machine"
+  }
+}

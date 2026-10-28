@@ -157,38 +157,39 @@
   "efficiency": {
     "model_size_mb": 42.72461986541748,
     "gmacs": 1.824804359,
+    "gmacs_note": "counted by ptflops on this model",
     "latency_bs1_ms": {
-      "median": 32.79754999675788,
-      "p95": 43.290150001121205,
-      "mean": 33.65271649985516,
+      "median": 34.8844000036479,
+      "p95": 38.334824999037664,
+      "mean": 34.89400299957197,
       "runs": 200,
       "warmup": 30
     },
     "throughput_bs32_ips": {
-      "images_per_s": 35.72001865768431,
+      "images_per_s": 33.85423468921893,
       "batch_size": 32,
       "runs": 20
     },
     "memory_rss_mb": {
-      "idle": 576.0,
-      "peak_bs1": 576.07421875,
-      "peak_bs32": 781.296875
+      "idle": 1199.4609375,
+      "peak_bs1": 1199.6328125,
+      "peak_bs32": 1245.921875
     }
   },
   "energy": {
-    "duration_s": 60.23115659999894,
+    "duration_s": 60.50811190000968,
     "images": 1995,
-    "cpu_kwh": 0.0006693722041670003,
-    "ram_kwh": 0.0001667572636112406,
-    "cpu_ram_kwh": 0.0008361294677782409,
-    "gpu_kwh_excluded": 0.00010230147073000007,
-    "co2e_kg": 3.2921385628428157e-06,
-    "wh_per_1000_images": 0.4191125151770631,
-    "cpu_wh_per_1000_images": 0.33552491436942367,
-    "ram_wh_per_1000_images": 0.0835876008076394,
-    "g_co2e_per_1000_images": 0.0016501947683422635,
-    "carbon_intensity_g_per_kwh": 3.9373550265973405,
-    "country": "Canada",
+    "cpu_kwh": 0.0006706028583339999,
+    "ram_kwh": 0.00016768978611131997,
+    "cpu_ram_kwh": 0.0008382926444453198,
+    "gpu_kwh_excluded": 4.8128094058000684e-05,
+    "co2e_kg": 0.0004727601665908048,
+    "wh_per_1000_images": 0.42019681425830563,
+    "cpu_wh_per_1000_images": 0.3361417836260651,
+    "ram_wh_per_1000_images": 0.08405503063224058,
+    "g_co2e_per_1000_images": 0.23697251458185706,
+    "carbon_intensity_g_per_kwh": 563.956,
+    "country": "Tunisia",
     "cpu_model": "AMD Ryzen 7 5800H with Radeon Graphics",
     "cpu_power_mode": "windows_emi",
     "cpu_power_source": "measured",

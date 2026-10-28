@@ -27,8 +27,9 @@ Thumbs.db
 dataset/
 skin-lesion-classification/data/
 
-# Model checkpoints (44 MB; regenerate with finetune_resnet18.py)
+# Model checkpoints: FP32 .pth (44 MB, finetune_resnet18.py); INT8 .pt (11 MB, quantize_ptq.py / train_qat.py)
 *.pth
+*.pt
 
 # Experiment tracking & logs
 wandb/

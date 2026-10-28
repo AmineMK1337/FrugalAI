@@ -1,0 +1,46 @@
+{
+  "fp32_state_dict": "results/strong_cosine25_resnet18/resnet18_baseline.pth",
+  "config": "configs/strong_cosine25.yaml",
+  "mode": "qat",
+  "epochs": 5,
+  "optimizer": "Adam",
+  "lr": 1e-05,
+  "lr_schedule": "cosine (T_max=5)",
+  "seed": 42,
+  "loss": "CrossEntropyLoss with balanced class weights from the train split",
+  "augmentation": "strong",
+  "batch_size": 32,
+  "freeze_bn_stats_after_epoch": 3,
+  "selection": "epoch with best validation macro F1 of the converted INT8 model",
+  "best_epoch": 1,
+  "torch_version": "2.12.0+cu126",
+  "engine": "onednn",
+  "supported_engines": [
+    "onednn"
+  ],
+  "engine_note": "x86 engine unavailable: this PyTorch build has no FBGEMM, so oneDNN is the only quantized engine",
+  "label": "onednn engine, x86 qconfig (reduce_range=True)",
+  "qconfig_backend": "x86",
+  "qconfig": "QConfig(activation=functools.partial(<class 'torch.ao.quantization.fake_quantize.FusedMovingAvgObsFakeQuantize'>, observer=<class 'torch.ao.quantization.observer.MovingAverageMinMaxObserver'>, quant_min=0, quant_max=255, reduce_range=True){}, weight=functools.partial(<class 'torch.ao.quantization.fake_quantize.FusedMovingAvgObsFakeQuantize'>, observer=<class 'torch.ao.quantization.observer.MovingAveragePerChannelMinMaxObserver'>, quant_min=-128, quant_max=127, dtype=torch.qint8, qscheme=torch.per_channel_symmetric){})",
+  "activation_observer": "FusedMovingAvgObsFakeQuantize",
+  "reduce_range": true,
+  "cpu_instruction_support": {
+    "cpu": "AMD Ryzen 7 5800H with Radeon Graphics",
+    "torch_cpu_capability": "AVX2",
+    "avx2": true,
+    "avx512f": false,
+    "avx512_vnni": false,
+    "avx_vnni": false,
+    "source": "py-cpuinfo 9.0.0"
+  },
+  "api": "eager mode, torchvision.models.quantization.resnet18(weights=None, quantize=False), fuse_model(is_qat=True), prepare_qat, convert",
+  "freeze_observers_after_epoch": 4,
+  "checks": {
+    "quantized_conv2d_modules": 20,
+    "output_shape": [
+      2,
+      7
+    ],
+    "file_size_mb": 10.79748821258545
+  }
+}

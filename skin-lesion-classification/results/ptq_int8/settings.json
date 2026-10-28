@@ -1,0 +1,58 @@
+{
+  "fp32_state_dict": "results/strong_cosine25_resnet18/resnet18_baseline.pth",
+  "config": "configs/strong_cosine25.yaml",
+  "engine": "onednn",
+  "supported_engines": [
+    "onednn"
+  ],
+  "engine_note": "x86 engine unavailable: this PyTorch build has no FBGEMM, so oneDNN is the only quantized engine",
+  "label": "onednn engine, x86 qconfig (reduce_range=True)",
+  "qconfig_backend": "x86",
+  "qconfig": "QConfig(activation=functools.partial(<class 'torch.ao.quantization.observer.HistogramObserver'>, reduce_range=True){}, weight=functools.partial(<class 'torch.ao.quantization.observer.PerChannelMinMaxObserver'>, dtype=torch.qint8, qscheme=torch.per_channel_symmetric){})",
+  "activation_observer": "HistogramObserver",
+  "reduce_range": true,
+  "cpu_instruction_support": {
+    "cpu": "AMD Ryzen 7 5800H with Radeon Graphics",
+    "torch_cpu_capability": "AVX2",
+    "avx2": true,
+    "avx512f": false,
+    "avx512_vnni": false,
+    "avx_vnni": false,
+    "source": "py-cpuinfo 9.0.0"
+  },
+  "api": "eager mode, torchvision.models.quantization.resnet18(weights=None, quantize=False), fuse_model(is_qat=False), prepare, convert",
+  "selected": {
+    "weights": "per_channel",
+    "calib_images": 128
+  },
+  "selection_rule": "max validation macro F1; ties -> per_channel, then calibration size 1024",
+  "val_scores": {
+    "accuracy": 0.8518886679920478,
+    "macro_f1": 0.7647479215369027,
+    "mel_recall": 0.7301587301587301
+  },
+  "fp32_val_scores": {
+    "accuracy": 0.8479125248508946,
+    "macro_f1": 0.7541692241886641,
+    "mel_recall": 0.7222222222222222
+  },
+  "calibration": {
+    "split": "train",
+    "transform": "eval (resize + normalize, no augmentation)",
+    "seed": 42,
+    "nested_prefixes_of": "results/ptq_int8/calibration_images.csv"
+  },
+  "ablation_files": {
+    "x86_qconfig": "ptq_ablation.csv",
+    "onednn_qconfig_reduce_range_false": "ptq_ablation_onednn_qconfig.csv"
+  },
+  "checks": {
+    "quantized_conv2d_modules": 20,
+    "output_shape": [
+      2,
+      7
+    ],
+    "file_size_mb": 10.79748821258545
+  },
+  "torch_version": "2.12.0+cu126"
+}
