@@ -159,40 +159,125 @@
     "gmacs": 1.824804359,
     "gmacs_note": "FP32 architecture count: quantization changes the precision of the operations, not their number",
     "latency_bs1_ms": {
-      "median": 12.479800003347918,
-      "p95": 13.084115006495267,
-      "mean": 12.568147500278428,
+      "median": 6.6505000067991205,
+      "p95": 7.719385005475487,
+      "mean": 6.826207000340219,
       "runs": 200,
       "warmup": 30
     },
     "throughput_bs32_ips": {
-      "images_per_s": 100.63588988435616,
+      "images_per_s": 189.71948077604023,
       "batch_size": 32,
       "runs": 20
     },
-    "memory_rss_mb": {
-      "idle": 973.2109375,
-      "peak_bs1": 973.59765625,
-      "peak_bs32": 964.921875
+    "memory_mb": {
+      "bs1": {
+        "batch_size": 1,
+        "baseline_mb": 695.98046875,
+        "after_load_mb": 735.203125,
+        "model_mb": 39.22265625,
+        "inference_peak_mb": 750.6875,
+        "activations_mb": 15.484375,
+        "process_peak_mb": 750.76953125,
+        "peak_over_baseline_mb": 54.7890625
+      },
+      "bs32": {
+        "batch_size": 32,
+        "baseline_mb": 714.09765625,
+        "after_load_mb": 752.76953125,
+        "model_mb": 38.671875,
+        "inference_peak_mb": 809.81640625,
+        "activations_mb": 57.046875,
+        "process_peak_mb": 809.81640625,
+        "peak_over_baseline_mb": 95.71875
+      },
+      "method": "fresh subprocess per batch size; baseline = RSS after imports; peak = OS peak working set"
+    },
+    "background_cpu_cores": {
+      "latency": {
+        "mean_cores": 1.41,
+        "max_cores": 2.82,
+        "samples": 2
+      },
+      "throughput": {
+        "mean_cores": 2.1653333333333333,
+        "max_cores": 3.0,
+        "samples": 6
+      },
+      "warn_threshold_cores": 1.0,
+      "logical_cores": 16
     }
   },
   "energy": {
-    "duration_s": 60.19112020000466,
-    "images": 6039,
-    "cpu_kwh": 0.000744639208334,
-    "ram_kwh": 0.00016693557333338608,
-    "cpu_ram_kwh": 0.000911574781667386,
-    "gpu_kwh_excluded": 5.1891152624000333e-05,
-    "co2e_kg": 0.0005140880675700124,
-    "wh_per_1000_images": 0.15094796848275974,
-    "cpu_wh_per_1000_images": 0.12330505188508031,
-    "ram_wh_per_1000_images": 0.02764291659767943,
-    "g_co2e_per_1000_images": 0.08512801251366327,
+    "repeats": [
+      {
+        "duration_s": 60.07611770000949,
+        "images": 10766,
+        "cpu_kwh": 0.0007760102750000004,
+        "ram_kwh": 0.00016664359638905602,
+        "gpu_kwh_excluded": 6.398477341000228e-05,
+        "wh_per_1000_images": 0.08755841272422965,
+        "cpu_wh_per_1000_images": 0.07207972088054991,
+        "ram_wh_per_1000_images": 0.015478691843679733,
+        "g_co2e_per_1000_images": 0.04937909220630565,
+        "carbon_intensity_g_per_kwh": 563.956,
+        "background_cpu_cores": {
+          "mean_cores": 3.042096,
+          "max_cores": 6.579999999999998,
+          "samples": 125
+        }
+      },
+      {
+        "duration_s": 60.107740100007504,
+        "images": 11278,
+        "cpu_kwh": 0.0008445927375,
+        "ram_kwh": 0.00016674403416687305,
+        "gpu_kwh_excluded": 6.414810687399922e-05,
+        "wh_per_1000_images": 0.08967341476031858,
+        "cpu_wh_per_1000_images": 0.07488852079269374,
+        "ram_wh_per_1000_images": 0.01478489396762485,
+        "g_co2e_per_1000_images": 0.050571860294570226,
+        "carbon_intensity_g_per_kwh": 563.956,
+        "background_cpu_cores": {
+          "mean_cores": 2.7822049180327872,
+          "max_cores": 4.1850000000000005,
+          "samples": 122
+        }
+      },
+      {
+        "duration_s": 60.15237870000419,
+        "images": 10606,
+        "cpu_kwh": 0.0007833915166669998,
+        "ram_kwh": 0.00016685498777773718,
+        "gpu_kwh_excluded": 6.3659495372001e-05,
+        "wh_per_1000_images": 0.089595182391546,
+        "cpu_wh_per_1000_images": 0.07386305078889306,
+        "ram_wh_per_1000_images": 0.015732131602652952,
+        "g_co2e_per_1000_images": 0.05052774068080671,
+        "carbon_intensity_g_per_kwh": 563.956,
+        "background_cpu_cores": {
+          "mean_cores": 3.247688524590164,
+          "max_cores": 6.689000000000001,
+          "samples": 122
+        }
+      }
+    ],
+    "n_repeats": 3,
+    "wh_per_1000_images": 0.08894233662536476,
+    "cpu_wh_per_1000_images": 0.07361043082071224,
+    "ram_wh_per_1000_images": 0.015331905804652511,
+    "g_co2e_per_1000_images": 0.05015956439389419,
     "carbon_intensity_g_per_kwh": 563.956,
+    "wh_per_1000_images_std": 0.0011991514078633573,
+    "g_co2e_per_1000_images_std": 0.0006762686313729891,
+    "images": 32650,
+    "duration_s": 180.3362365000212,
     "country": "Tunisia",
     "cpu_model": "AMD Ryzen 7 5800H with Radeon Graphics",
     "cpu_power_mode": "windows_emi",
     "cpu_power_source": "measured",
-    "tracking_mode": "machine"
+    "ram_power_source": "estimated by CodeCarbon (no RAM power meter)",
+    "tracking_mode": "machine",
+    "background_cpu_cores_mean": 3.0239964808743167
   }
 }

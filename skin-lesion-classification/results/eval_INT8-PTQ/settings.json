@@ -1,5 +1,5 @@
 {
-  "timestamp_utc": "2026-10-28T00:11:57+00:00",
+  "timestamp_utc": "2026-10-28T01:42:39+00:00",
   "model_label": "INT8-PTQ",
   "model_path": "results/ptq_int8/resnet18_ptq_int8.pt",
   "model_sha256": "4d3dc0914f3f64a686042c78cffa1b31271f431b1f14affc7555ad5d172eb39d",
@@ -15,7 +15,7 @@
   "cpu_logical_cores": 16,
   "ram_gb": 15.345375061035156,
   "os": "Windows-11-10.0.26300-SP0",
-  "git_commit": "b34a7499147723046453a969e85e5459e3252031",
+  "git_commit": "ad1617c36b893fc6d2d65a0dea1ce89e01b1bd51",
   "versions": {
     "python": "3.14.0",
     "torch": "2.12.0+cu126",

@@ -12,16 +12,21 @@ Fine-tuning ResNet-18 on the HAM10000 skin-lesion dataset and benchmarking it on
 
 ```
 skin-lesion-classification/
-├── finetune_resnet18.py   # fine-tunes ResNet-18 on HAM10000 (model D by default)
-├── evaluation.ipynb       # all benchmarks, with plots in the cell outputs
-├── configs/               # strong_cosine25.yaml = model D; the other three are the compared setups
-├── src/ham10000/          # dataset, model, training and Grad-CAM code
-├── results/
-│   ├── strong_cosine25_resnet18/  # model D: training history, metrics, confusion matrices, Grad-CAM
-│   ├── <other runs>/              # the three setups model D was compared against
-│   ├── comparison.json            # test-set scores of all four setups
-│   └── metrics.json               # benchmark results exported by the notebook
-└── report.md              # written audit of the ResNet-18 run
+├── finetune_resnet18.py      # fine-tunes ResNet-18 on HAM10000 (model D by default)
+├── quantize_ptq.py           # INT8 post-training quantization (+ ablation on validation)
+├── train_qat.py              # INT8 quantization-aware training (+ FP32 control run)
+├── validation_summary.py     # validation scores of FP32 / PTQ / QAT / control
+├── evaluate_model.ipynb      # test-set evaluation of one model, with plots
+├── run_evaluations.py        # runs evaluate_model.ipynb for FP32, PTQ and QAT back to back
+├── compare_models.ipynb      # FP32 vs INT8 comparison table, significance tests, plots
+├── configs/                  # strong_cosine25.yaml = model D; the other three are the compared setups
+├── src/ham10000/             # data, model, training, quantization, memory/speed probes
+└── results/
+    ├── strong_cosine25_resnet18/  # model D (FP32): checkpoint, training history, Grad-CAM
+    ├── ptq_int8/, qat_int8/       # INT8 models, ablation, training history, settings
+    ├── eval_FP32/, eval_INT8-*/   # test-set evaluation of each model
+    ├── comparison/                # FP32 vs INT8 comparison
+    └── <other runs>/              # the three FP32 setups model D was compared against
 ```
 
 ## Setup
@@ -74,23 +79,38 @@ Model D was picked from four training setups; see [comparaison.md](comparaison.m
 
 The split is made on `lesion_id`, so images of the same lesion never land in two splits: **80% train** (7,974 images), **10% validation** (1,006, picks the best epoch) and **10% test** (1,035, used only by the notebook, never seen during training).
 
-**2. Benchmark**
+**2. Quantize to INT8**
 
-Open `evaluation.ipynb` with the `Python (skin-lesion venv)` kernel and run all cells. It loads `resnet18_baseline.pth`, evaluates the test split, draws one figure per metric family, and exports everything to `results/metrics.json`.
+```bash
+python quantize_ptq.py           # PTQ ablation, chosen on validation macro F1
+python quantize_ptq.py --save    # save the selected PTQ model
+python train_qat.py              # QAT, 5 epochs on GPU
+python train_qat.py --control    # FP32 control: same 5 epochs, no quantization
+python validation_summary.py     # compare all four on the validation split
+```
+
+Eager-mode quantization of torchvision's quantizable ResNet-18 with the **onednn engine and the x86 qconfig (`reduce_range=True`)**. The x86 engine needs FBGEMM, which this PyTorch build lacks. `reduce_range=True` keeps INT8 dot products from overflowing on CPUs without VNNI, such as this AVX2-only Ryzen; the ablation with the onednn default qconfig is kept in `results/ptq_int8/ptq_ablation_onednn_qconfig.csv` as evidence. The test split is never used for any of these choices.
+
+**3. Evaluate on the test set**
+
+```bash
+python run_evaluations.py        # evaluate_model.ipynb for FP32, PTQ and QAT, back to back on CPU (4 threads)
+```
+
+Then run `compare_models.ipynb`. Keep the laptop on mains power and close busy programs first: latency and energy are sensitive to background load, and the evaluation warns when another program uses more than one CPU core or when speed drifts during the session.
 
 ## Results
 
-Model D (best epoch 25 of 25), evaluated on the 1,035 unseen test images. Inference on an NVIDIA GTX 1650 (Ryzen 7 5800H host).
+Test set: 1,035 images never seen during training or model selection.
 
-| Performance | | Efficiency | | Environment | |
-|---|---|---|---|---|---|
-| Accuracy | 81.5% | Parameters | 11.18 M (42.7 MB) | Energy | 0.229 Wh (825 J) |
-| Macro F1 | 0.686 | FLOPs | 3.65 GFLOPs / image | CO₂e | 0.129 g |
-| Macro recall | 0.699 | Latency (batch 1) | 5.6 ± 0.4 ms | Per image | 0.80 J, 0.12 mg CO₂e |
-| Macro specificity | 0.961 | Throughput (batch 32) | 721 images/s | Average power | 60 W |
-| Macro AUC | 0.953 | Peak memory (batch 1) | 69 MB (GPU) | Grid intensity | 564 g CO₂e/kWh (Tunisia) |
+| | FP32 (model D) | INT8-PTQ | INT8-QAT |
+|---|---|---|---|
+| Accuracy | 81.5% | 81.3% | 80.9% |
+| Macro F1 | 0.686 | 0.688 | 0.675 |
+| Macro AUC | 0.953 | 0.951 | 0.955 |
+| Model size | 42.7 MB | 10.8 MB | 10.8 MB |
 
-Weighted F1 is 0.819. Per-class F1 ranges from 0.55 (actinic keratosis, 35 test images) to 0.91 (melanocytic nevi, 663 test images). Latency varies by a millisecond or two between runs on this GPU.
+No INT8 accuracy difference is statistically significant (paired bootstrap, `results/comparison/paired_bootstrap.csv`). QAT brings no gain over PTQ here: its small validation gain matched what 5 extra FP32 epochs give on their own. Latency, throughput, memory and energy are in `results/comparison/comparison_table.csv`; INT8 runs about 3x faster on CPU.
 
 ## Credits
 

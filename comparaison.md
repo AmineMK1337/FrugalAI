@@ -78,14 +78,14 @@ With 1,035 test images, small gaps can be luck. A paired bootstrap resamples the
 
 ## Cost (frugal-AI view)
 
-- **Inference: no difference.** All four are the same ResNet-18 with the same 11.18 M parameters (42.7 MB). FLOPs, latency, throughput, memory and energy per image are identical, so the benchmarks in `evaluation.ipynb` apply to whichever checkpoint is deployed.
+- **Inference: no difference.** All four are the same ResNet-18 with the same 11.18 M parameters (42.7 MB). FLOPs, latency, throughput, memory and energy per image are identical, so the benchmarks in `evaluate_model.ipynb` apply to whichever checkpoint is deployed.
 - **Training: D costs about 2.5× more than A** (31.7 vs 12.8 minutes on a GTX 1650). Training energy should scale roughly with that time. It wasn't measured with CodeCarbon, which currently tracks only test-set inference.
 
 The extra training is a one-off cost. A model scores thousands of images over its life, so a 2.4-point accuracy gain for 19 extra minutes of training is a good trade.
 
 ## Recommendation
 
-**Use run D** (`configs/strong_cosine25.yaml`, checkpoint `skin-lesion-classification/results/strong_cosine25_resnet18/resnet18_baseline.pth`) as the default model. *Adopted: D is now the default for `finetune_resnet18.py`, `resnet18_baseline.pth` and `evaluation.ipynb`.*
+**Use run D** (`configs/strong_cosine25.yaml`, checkpoint `skin-lesion-classification/results/strong_cosine25_resnet18/resnet18_baseline.pth`) as the default model. *Adopted: D is now the default for `finetune_resnet18.py`, `resnet18_baseline.pth` and `evaluate_model.ipynb`.*
 
 One trade-off to be aware of: **D finds slightly fewer melanomas than A.** Melanoma recall is 65.7% vs 69.7%: 65 of 99 test melanomas caught, against 69. Melanoma precision and F1 are higher, so D makes fewer false melanoma alarms. If missing a melanoma is the costliest error in your use case, its decision threshold could be tuned to trade some precision back for recall.
 
