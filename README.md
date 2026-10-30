@@ -8,6 +8,21 @@ Fine-tuning ResNet-18 on the HAM10000 skin-lesion dataset and benchmarking it on
 | Efficiency | Size, FLOPs, Latency, Throughput, Memory |
 | Environment | Energy (kWh), CO₂e (kg) |
 
+## What was done
+
+1. **Correct dataset and a clean split.** The model was first trained on an ISIC archive export (11,720 images, diagnoses mapped from free-text fields). It was retrained on the official HAM10000 release (10,015 images, 7 classes). The split is made by lesion, 80/10/10, so the test images are never seen during training or model selection. HAM10000 is strongly imbalanced: melanocytic nevi are 66.9% of the images, dermatofibroma 1.1% (58×). Training therefore uses class-weighted cross-entropy, and macro metrics are reported.
+2. **Data augmentation and training length.** Four FP32 setups were compared: standard vs strong augmentation, 10 epochs vs 25 epochs with a cosine schedule. Strong augmentation with 25 epochs (**model D**) is best on test: accuracy 81.5% and macro F1 0.686, against 79.0% and 0.654 for the starting setup. Neither change helps on its own. Details in [comparaison.md](comparaison.md).
+3. **A reproducible evaluation pipeline** on CPU (4 threads):
+   - predictive metrics with 95% bootstrap confidence intervals;
+   - model size, MACs, latency (30 warm-up + 200 runs), throughput at batch 32;
+   - memory measured in a fresh process;
+   - CPU + RAM energy with CodeCarbon, 3 repeats of 60 s.
+
+   Each run records how much CPU other programs used, and a check before and after the session flags drifting timings.
+4. **INT8 post-training quantization (PTQ).** Calibration size (128 to 2,048 training images) and weight granularity (per-channel or per-tensor) were chosen on validation macro F1. The first attempt used the onednn default qconfig and lost up to 0.11 validation macro F1: full-range activations overflow in INT8 arithmetic on this AVX2-only CPU, which has no VNNI. The x86 qconfig (`reduce_range=True`) fixes it. The selected setting is per-channel weights with 128 calibration images.
+5. **INT8 quantization-aware training (QAT).** 5 epochs from model D, the best INT8 epoch chosen on validation. A control run (the same 5 epochs in FP32, without quantization) gained as much on validation as QAT did. So QAT's small gain comes from the extra training, not from quantization.
+6. **A test-set comparison** of FP32, PTQ and QAT on the same 1,035 images, with paired bootstrap tests of the differences.
+
 ## Repository layout
 
 ```
@@ -61,7 +76,7 @@ dataset/
 └── HAM10000_images_part_2/      # 5,015 .jpg images
 ```
 
-If you store it elsewhere, update `metadata_csv` and `data_dir` in `configs/baseline.yaml`, and `DATA_DIR` / `METADATA_CSV` in the notebook's first cell. `dataset/` is gitignored.
+If you store it elsewhere, update `metadata_csv` and `data_dir` in the files in `configs/`. `dataset/` is gitignored.
 
 ## Usage
 
@@ -101,16 +116,43 @@ Then run `compare_models.ipynb`. Keep the laptop on mains power and close busy p
 
 ## Results
 
-Test set: 1,035 images never seen during training or model selection.
+Test set: 1,035 images never seen during training or model selection. Costs measured on CPU (Ryzen 7 5800H, 4 threads) in a session whose timings stayed stable within ±2%.
 
 | | FP32 (model D) | INT8-PTQ | INT8-QAT |
 |---|---|---|---|
 | Accuracy | 81.5% | 81.3% | 80.9% |
 | Macro F1 | 0.686 | 0.688 | 0.675 |
 | Macro AUC | 0.953 | 0.951 | 0.955 |
+| Melanoma recall | 65.7% | 67.7% | 71.7% |
 | Model size | 42.7 MB | 10.8 MB | 10.8 MB |
+| Latency, 1 image (median) | 24.1 ms | 6.8 ms | 6.7 ms |
+| Throughput, batch 32 | 47.6 img/s | 186.3 img/s | 189.7 img/s |
+| Peak memory, batch 32 | 394 MB | 96 MB | 96 MB |
+| Energy, CPU + RAM | 0.294 Wh / 1,000 img | 0.088 Wh / 1,000 img | 0.089 Wh / 1,000 img |
+| CO₂e (564 g/kWh, Tunisia) | 0.166 g / 1,000 img | 0.049 g / 1,000 img | 0.050 g / 1,000 img |
 
-No INT8 accuracy difference is statistically significant (paired bootstrap, `results/comparison/paired_bootstrap.csv`). QAT brings no gain over PTQ here: its small validation gain matched what 5 extra FP32 epochs give on their own. Latency, throughput, memory and energy are in `results/comparison/comparison_table.csv`; INT8 runs about 3x faster on CPU.
+- **Accuracy:** no INT8 difference is statistically significant (paired bootstrap, `results/comparison/paired_bootstrap.csv`). INT8-PTQ gives the same prediction as FP32 for 96.2% of test images.
+- **Costs:** INT8 is 4× smaller, uses about 4× less memory, and is roughly 3–4× faster and 3× cheaper in energy.
+- **QAT brings no gain over PTQ here,** so PTQ is the recommended INT8 model.
+- **Per-class scores for the rarest classes** (14 vasc and 20 df test images) move by 5–7 points per image, so per-class differences between models should not be over-read.
+
+Full tables and plots: `results/comparison/`.
+
+### Measurement caveats
+
+The accuracy results are final. The cost ratios are slightly optimistic for INT8:
+
+- **Runtime.** FP32 is timed as an eager PyTorch model and INT8 as TorchScript. FP32 in TorchScript is about 1.18× faster than eager, so the speed-up from quantization alone is **about 3.3×**.
+- **Idle power.** The laptop draws about 35 W with no model running, and the slower model is charged more of that per image. Counting only the energy the model adds above that floor, the saving is **about 2.7×**; the 3.4× in the table is the total machine energy per image.
+- **RAM power** is estimated by CodeCarbon as a constant 10 W, not measured. CPU power is measured (Windows EMI).
+- **Background load.** Timings depend on what else is running. Busy programs (a browser, cloud sync) shifted latency by up to 80% between sessions, so measure on mains power with other programs closed.
+
+## Next steps
+
+- Benchmark FP32 as TorchScript, measure the no-model power floor, and interleave FP32/PTQ/QAT measurements, to make the cost ratios exact.
+- Try a compression that removes operations rather than lowering their precision: structured pruning (then INT8), lower input resolution, or distillation into a smaller network.
+- Measure training energy with CodeCarbon, so the lifecycle footprint is complete.
+- Tune the melanoma decision threshold on validation, to trade false alarms for fewer missed melanomas.
 
 ## Credits
 
