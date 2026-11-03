@@ -2,7 +2,6 @@ from torch.utils.data import Dataset, DataLoader, Subset
 import pandas as pd
 from PIL import Image
 from pathlib import Path
-from sklearn.model_selection import train_test_split
 from torchvision import transforms
 from sklearn.utils.class_weight import compute_class_weight
 import torch
@@ -97,38 +96,23 @@ def eval_transform(config):
 
 
 def lesion_split(data, config):
-    """Return (train_idx, val_idx, test_idx) row indices of the lesion-level split.
+    """Return (train_idx, val_idx, test_idx) row indices of the fixed split.
 
-    With config.splits_csv set, the partitions come from that file (written by
-    make_splits.py, 70/15/15 stratified by dx). Otherwise the old unstratified
-    80/10/10 split is rebuilt: the holdout left after the train split is halved
-    into val (checkpoint selection) and test (final evaluation, never seen
-    during training).
+    The partitions come from config.splits_csv, written by make_splits.py: 70/15/15
+    of the lesions, stratified by dx. Every image follows its lesion.
     """
-    if config.splits_csv:
-        partition = pd.read_csv(config.splits_csv).set_index("image_id")["partition"]
-        row_partition = data["image_id"].map(partition)
-        if len(partition) != len(data) or row_partition.isna().any():
-            raise ValueError(f"{config.splits_csv} does not cover the metadata rows exactly")
-        return tuple(data.index[row_partition == p].tolist() for p in ("train", "validation", "test"))
-
-    lesion_ids = data["lesion_id"].unique()
-    train_ids, holdout_ids = train_test_split(
-        lesion_ids, train_size=config.train_test_split, random_state=config.seed
-    )
-    val_ids, test_ids = train_test_split(
-        holdout_ids, test_size=0.5, random_state=config.seed
-    )
-    def rows(ids):
-        return data.index[data["lesion_id"].isin(ids)].tolist()
-    return rows(train_ids), rows(val_ids), rows(test_ids)
+    partition = pd.read_csv(config.splits_csv).set_index("image_id")["partition"]
+    row_partition = data["image_id"].map(partition)
+    if len(partition) != len(data) or row_partition.isna().any():
+        raise ValueError(f"{config.splits_csv} does not cover the metadata rows exactly")
+    return tuple(data.index[row_partition == p].tolist() for p in ("train", "validation", "test"))
 
 
 def build_test_loader(config, batch_size=None, num_workers=0):
     """Build the test DataLoader: no augmentation, no shuffling.
 
     Uses the same lesion_split as build_dataloaders, so it is exactly the
-    10% of lesions that training never saw.
+    15% of lesions that training never saw.
 
     Returns:
         (test_loader, test_df, class_to_idx) where test_df holds the test
@@ -142,13 +126,11 @@ def build_test_loader(config, batch_size=None, num_workers=0):
 
 
 def build_dataloaders(config):
-    """Build train and val DataLoaders with a lesion-level 80/10/10 split.
+    """Build train and val DataLoaders from the fixed 70/15/15 stratified split.
 
-    Splits on lesion_id (not image_id) so that multiple images of the same
-    lesion never appear in more than one split, which would leak information.
-    The remaining 10% test split is left untouched for evaluation.ipynb.
-    The split is seeded with config.seed for reproducibility. Training data
-    is augmented when config.use_augmentation is set (config.augmentation picks
+    The split is at lesion level, so multiple images of the same lesion never
+    appear in more than one partition, which would leak information. The
+    remaining 15% test partition is not loaded here. Training data is augmented when config.use_augmentation is set (config.augmentation picks
     "standard" or "strong"); validation data always uses a deterministic
     resize + normalize pipeline.
 

@@ -29,7 +29,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-SCRIPT_VERSION = "1.0"
+SCRIPT_VERSION = "1.1"
 HERE = Path(__file__).resolve().parent
 CLASSES = ["akiec", "bcc", "bkl", "df", "mel", "nv", "vasc"]
 OFFICIAL_COUNTS = {"nv": 6705, "mel": 1113, "bkl": 1099, "bcc": 514, "akiec": 327, "vasc": 142, "df": 115}
@@ -37,7 +37,6 @@ EXPECTED_IMAGES, EXPECTED_LESIONS = 10015, 7470
 IMAGE_FOLDERS = ["HAM10000_images_part_1", "HAM10000_images_part_2"]
 PARTITIONS = ["train", "validation", "test"]
 METADATA_COLUMNS = ["age", "sex", "localization", "dx_type"]
-OLD_TEST_SPLIT = HERE.parent / "skin-lesion-classification" / "results" / "test_split.csv"  # read only
 
 
 def parse_args():
@@ -111,21 +110,6 @@ def split_lesions(meta, args):
     return dict(zip(assignment["lesion_id"], assignment["partition"]))
 
 
-def old_split_partition(meta):
-    """Re-create the old project's unstratified 80/10/10 lesion split (old src/ham10000/data.py, lesion_split),
-    without importing the old code, and check it against the old results/test_split.csv."""
-    lesion_ids = meta["lesion_id"].unique()  # the old code used the metadata order
-    old_train, holdout = train_test_split(lesion_ids, train_size=0.8, random_state=42)
-    old_val, old_test = train_test_split(holdout, test_size=0.5, random_state=42)
-    part = {**{l: "train" for l in old_train}, **{l: "validation" for l in old_val}, **{l: "test" for l in old_test}}
-    old_partition = meta["lesion_id"].map(part)
-    verified = None
-    if OLD_TEST_SPLIT.exists():
-        saved = set(pd.read_csv(OLD_TEST_SPLIT)["image_id"])
-        verified = saved == set(meta.loc[old_partition == "test", "image_id"])
-    return old_partition, verified
-
-
 def sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -146,7 +130,7 @@ def make_figures(df, out_dir):
         "axes.titlesize": 10, "axes.labelsize": 9, "xtick.labelsize": 8, "ytick.labelsize": 8, "legend.fontsize": 8,
         "svg.hashsalt": "ham10000",
     })
-    colors = {"train": "#1f77b4", "validation": "#ff7f0e", "test": "#2ca02c"}
+    colors = {"train": "#2a78d6", "validation": "#eb6834", "test": "#1baf7a"}
     counts = pd.crosstab(df["dx"], df["partition"]).reindex(index=CLASSES, columns=PARTITIONS)
     x, w = np.arange(len(CLASSES)), 0.27
 
@@ -170,15 +154,18 @@ def make_figures(df, out_dir):
     props = (counts / counts.sum() * 100)
     props["full dataset"] = df["dx"].value_counts(normalize=True).reindex(CLASSES) * 100
     cols = PARTITIONS + ["full dataset"]
-    colors_all = {**colors, "full dataset": "#7f7f7f"}
+    colors_all = {**colors, "full dataset": "#8a8981"}
     fig, ax = plt.subplots(figsize=(8, 3.2))
     w2 = 0.2
     for k, c in enumerate(cols):
         ax.bar(x + (k - 1.5) * w2, props[c], w2 * 0.92, color=colors_all[c], label=c)
     ax.set_xticks(x)
     ax.set_xticklabels(CLASSES)
+    for i, c in enumerate(CLASSES):  # one label per class: its share of the full dataset
+        ax.text(i, props.loc[c, cols].max() + 1.5, f"{props.loc[c, 'full dataset']:.1f}%", ha="center", fontsize=8)
+    ax.set_ylim(top=props[cols].values.max() + 8)
     ax.set_ylabel("% of the partition's images")
-    ax.set_title("Class proportions per partition")
+    ax.set_title("Each partition keeps the class mix of the full dataset (labels: full dataset)")
     ax.legend(frameon=False, ncol=4, loc="upper left")
     ax.grid(axis="x", visible=False)
     save_fig(fig, out_dir, "class_proportions")
@@ -200,6 +187,45 @@ def make_figures(df, out_dir):
     ax.set_title("Partition sizes (plain: images, hatched: lesions)")
     ax.grid(axis="x", visible=False)
     save_fig(fig, out_dir, "partition_proportions")
+
+    # 4. What stratification does: every class's lesions are split 70/15/15
+    lesions = df.drop_duplicates("lesion_id")
+    lesion_counts = pd.crosstab(lesions["dx"], lesions["partition"]).reindex(index=CLASSES, columns=PARTITIONS)
+    shares = lesion_counts.div(lesion_counts.sum(axis=1), axis=0) * 100
+    fig, ax = plt.subplots(figsize=(8, 3.6))
+    y = np.arange(len(CLASSES))
+    left = np.zeros(len(CLASSES))
+    for p in PARTITIONS:
+        ax.barh(y, shares[p], left=left, height=0.62, color=colors[p], edgecolor="white", linewidth=1.5, label=p)
+        left += shares[p].to_numpy()
+    ax.set_yticks(y)
+    ax.set_yticklabels([f"{c} (n={lesion_counts.loc[c].sum():,})" for c in CLASSES])
+    ax.invert_yaxis()
+    ax.set_xlim(0, 100)
+    ax.set_xticks([0, 70, 85, 100])
+    ax.set_xticklabels(["0%", "70%", "85%", "100%"])
+    ax.set_xlabel("Share of the class's lesions")
+    ax.set_title("Stratification: every class is split 70/15/15, however rare it is")
+    ax.legend(frameon=False, ncol=3, loc="lower center", bbox_to_anchor=(0.5, 1.08))
+    ax.grid(axis="y", visible=False)
+    save_fig(fig, out_dir, "split_per_class")
+
+    # 5. How far each partition's class mix is from the full dataset
+    difference = props[PARTITIONS].sub(props["full dataset"], axis=0)
+    fig, ax = plt.subplots(figsize=(8, 3.2))
+    for k, p in enumerate(PARTITIONS):
+        ax.plot(x + (k - 1) * 0.16, difference[p], "o", ms=7, color=colors[p], mec="white", mew=1, label=p)
+    ax.axhline(0, color="#52514e", lw=1)
+    for limit in (-1, 1):
+        ax.axhline(limit, color="#8a8981", lw=1, ls=(0, (4, 3)))
+    ax.set_ylim(-1.25, 1.25)
+    ax.set_xticks(x)
+    ax.set_xticklabels(CLASSES)
+    ax.set_ylabel("Difference from the\nfull dataset (percentage points)")
+    ax.set_title("Class shares stay within the 1-point limit (dashed) in every partition")
+    ax.legend(frameon=False, ncol=3, loc="lower center", bbox_to_anchor=(0.5, 1.08))
+    ax.grid(axis="x", visible=False)
+    save_fig(fig, out_dir, "class_share_difference")
 
 
 def main():
@@ -282,17 +308,6 @@ def main():
     worst = diff.stack().idxmax()
     check(8, "Class proportions per partition within 1 pp of the full dataset", diff.values.max() < 1,
           f"max difference {diff.values.max():.3f} pp ({worst[0]} in {worst[1]})")
-
-    old_partition, old_verified = old_split_partition(meta)
-    new_test = df.loc[df["partition"] == "test", "image_id"]
-    positions = pd.Index(meta["image_id"]).get_indexer(new_test)
-    old_of_new_test = old_partition.iloc[positions].value_counts()
-    detail = (f"old split re-created and {'matches' if old_verified else 'DOES NOT match'} {OLD_TEST_SPLIT.as_posix()}; "
-              if old_verified is not None else "old test_split.csv not found, old split re-created only; ")
-    detail += (f"of the {len(new_test)} new test images, {old_of_new_test.get('train', 0)} were in the old TRAIN set "
-               f"({old_of_new_test.get('train', 0) / len(new_test):.1%}), {old_of_new_test.get('validation', 0)} in old validation, "
-               f"{old_of_new_test.get('test', 0)} in old test")
-    check(9, "Comparison with the old split (information)", old_verified is not False, detail)
 
     report_text = "\n".join([f"HAM10000 split integrity report (make_splits.py v{SCRIPT_VERSION}, seed {args.seed})",
                              "", "Dataset checks:"] + [f"  [PASS] {l}" for l in dataset_log] + ["", "Split checks:"]

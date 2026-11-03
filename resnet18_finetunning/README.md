@@ -9,11 +9,9 @@ resnet18_finetunning/
 ├── make_splits.py            # builds the fixed 70/15/15 split in splits/
 ├── finetune_resnet18.py      # fine-tunes ResNet-18 from a config
 ├── configs/
-│   ├── baseline.yaml         # 10 epochs, standard augmentation (no fixed split)
-│   ├── standard_cosine25.yaml  # 25 epochs, cosine LR schedule (no fixed split)
 │   ├── strong_aug.yaml       # strong augmentation
 │   └── strong_cosine25.yaml  # strong augmentation, 25 epochs, cosine LR schedule
-├── splits/                   # split CSVs, summary, config and integrity report
+├── splits/                   # split CSVs, summary, config, integrity report and figures/
 ├── src/ham10000/             # data, model, training, evaluation, Grad-CAM
 └── results/
     ├── strong_aug_resnet18/

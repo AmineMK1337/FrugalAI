@@ -1,4 +1,4 @@
-HAM10000 split integrity report (make_splits.py v1.0, seed 42)
+HAM10000 split integrity report (make_splits.py v1.1, seed 42)
 
 Dataset checks:
   [PASS] metadata rows: 10015 (expected 10015), image_id unique
@@ -24,7 +24,5 @@ Split checks:
       train: images 69.71%, lesions 70.00%; validation: images 15.30%, lesions 14.99%; test: images 15.00%, lesions 15.01%
 [PASS] 8. Class proportions per partition within 1 pp of the full dataset
       max difference 0.530 pp (bkl in validation)
-[PASS] 9. Comparison with the old split (information)
-      old split re-created and matches C:/Users/Speeker/OneDrive - SUPCOM/Desktop/FrugalAI/skin-lesion-classification/results/test_split.csv; of the 1502 new test images, 1187 were in the old TRAIN set (79.0%), 143 in old validation, 172 in old test
 
 ALL CHECKS PASSED

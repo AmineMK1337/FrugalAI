@@ -1,7 +1,7 @@
 """
 Fine-tune an ImageNet-pretrained ResNet-18 on HAM10000
 ======================================================
-1. Builds the lesion-level 80/10/10 split (train / val / test; test is left for evaluation.ipynb).
+1. Loads the fixed 70/15/15 stratified lesion-level split from splits/ (the test partition is not used here).
 2. Fine-tunes ResNet-18 with the settings in the YAML config (augmentation, epochs, lr schedule, ...).
 3. Saves the lowest-val-loss epoch as resnet18_baseline.pth, in the results dir and in the working directory.
 4. Writes val metrics, confusion matrices, training history and Grad-CAM maps to the results dir.
@@ -329,7 +329,6 @@ def main():
             "use_augmentation": config.use_augmentation,
             "augmentation": config.augmentation,
             "lr_schedule": config.lr_schedule,
-            "train_test_split": config.train_test_split,
             "splits_csv": config.splits_csv,
             "metadata_csv": config.metadata_csv,
             "data_dir": config.data_dir,

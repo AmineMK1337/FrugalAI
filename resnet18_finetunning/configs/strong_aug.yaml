@@ -6,7 +6,6 @@ data_dir: "../dataset"
 # Data
 image_size: 224
 splits_csv: "splits/ham10000_splits.csv"   # fixed 70/15/15 split from make_splits.py
-train_test_split: 0.8   # ignored while splits_csv is set
 num_workers: 4
 
 # Model

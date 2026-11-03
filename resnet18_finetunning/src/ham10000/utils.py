@@ -5,8 +5,8 @@ from dataclasses import dataclass
 @dataclass
 class Config:
     seed: int
+    splits_csv: str   # fixed 70/15/15 stratified split from make_splits.py
     image_size: int
-    train_test_split: float
     model_name: str
     num_classes: int
     batch_size: int
@@ -21,7 +21,6 @@ class Config:
     num_workers: int = 0
     augmentation: str = "standard"  # "standard" or "strong"
     lr_schedule: str = "constant"   # "constant" or "cosine"
-    splits_csv: str | None = None   # fixed split from make_splits.py; overrides train_test_split
 
 def load_config(path):
     """Load a YAML config file into a typed Config dataclass."""

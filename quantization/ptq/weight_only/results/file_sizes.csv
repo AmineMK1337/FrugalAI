@@ -1,0 +1,4 @@
+file,variant,bytes,MB,pct_of_fp32
+resnet18_baseline.pth,FP32,44800907,44.800907,100.0
+resnet18_w8_perchannel.pt,per_channel,11311452,11.311452,25.24826562105093
+resnet18_w8_pertensor.pt,per_tensor,11291719,11.291719,25.204219637785457
