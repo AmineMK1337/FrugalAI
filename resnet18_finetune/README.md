@@ -5,7 +5,7 @@ Fine-tuning an ImageNet-pretrained ResNet-18 on the HAM10000 skin-lesion dataset
 ## Layout
 
 ```
-skin-lesion-classification-v2/
+resnet18_finetune/
 ├── make_splits.py            # builds the fixed 70/15/15 split in splits/
 ├── finetune_resnet18.py      # fine-tunes ResNet-18 from a config
 ├── configs/
@@ -21,7 +21,7 @@ skin-lesion-classification-v2/
 ## Setup
 
 ```bash
-cd skin-lesion-classification-v2
+cd resnet18_finetune
 python -m venv venv
 venv\Scripts\activate          # Windows  (Linux/macOS: source venv/bin/activate)
 pip install -r requirements.txt   # also installs src/ham10000 as a package
