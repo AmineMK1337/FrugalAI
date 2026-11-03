@@ -11,7 +11,7 @@ Fixed, lesion-aware, class-stratified train / validation / test split of HAM1000
    split_config.json, integrity_report.txt and figures/. No image is copied,
    moved, resized or augmented.
 
-Usage (from resnet18_finetune/):
+Usage (from resnet18_finetunning/):
   python make_splits.py
   python make_splits.py --seed 42 --train 0.70 --val 0.15 --test 0.15
 """

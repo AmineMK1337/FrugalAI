@@ -23,7 +23,7 @@ Skin-lesion classification on HAM10000 with a fine-tuned ResNet-18. This page su
 | Validation | 1,532 | 1,120 |
 | Test | 1,502 | 1,121 |
 
-All 7 classes appear in every partition. Each class's share of every partition is within 0.53 percentage points of its share of the full dataset. The script checks the dataset and the split before writing anything, and all checks passed ([integrity_report.txt](resnet18_finetune/splits/integrity_report.txt)). It also records SHA-256 hashes of the split files ([split_config.json](resnet18_finetune/splits/split_config.json)).
+All 7 classes appear in every partition. Each class's share of every partition is within 0.53 percentage points of its share of the full dataset. The script checks the dataset and the split before writing anything, and all checks passed ([integrity_report.txt](resnet18_finetunning/splits/integrity_report.txt)). It also records SHA-256 hashes of the split files ([split_config.json](resnet18_finetunning/splits/split_config.json)).
 
 ## 3. Fine-tuning
 
@@ -38,8 +38,8 @@ The two runs differ in a single setting, the learning-rate schedule:
 
 | Run | Config | Learning-rate schedule |
 |---|---|---|
-| strong_aug | [strong_aug.yaml](resnet18_finetune/configs/strong_aug.yaml) | constant 1e-4 |
-| strong_cosine25 | [strong_cosine25.yaml](resnet18_finetune/configs/strong_cosine25.yaml) | cosine, decaying from 1e-4 to ~0 |
+| strong_aug | [strong_aug.yaml](resnet18_finetunning/configs/strong_aug.yaml) | constant 1e-4 |
+| strong_cosine25 | [strong_cosine25.yaml](resnet18_finetunning/configs/strong_cosine25.yaml) | cosine, decaying from 1e-4 to ~0 |
 
 Both runs trained on an NVIDIA A40 in about 18 minutes each.
 
@@ -54,7 +54,7 @@ The cosine schedule beats the constant learning rate on every overall metric, wi
 
 These scores are on the validation set, which was also used to pick the best epoch, so they are slightly optimistic. The test set (1,502 images) is still unused and is reserved for the final evaluation.
 
-Each run's folder in [resnet18_finetune/results/](resnet18_finetune/results/) contains:
+Each run's folder in [resnet18_finetunning/results/](resnet18_finetunning/results/) contains:
 - per-class classification reports
 - confusion matrices, as counts and normalized
 - the training history for every epoch
@@ -69,4 +69,4 @@ Each run's folder in [resnet18_finetune/results/](resnet18_finetune/results/) co
 
 ## Reproduce
 
-See [resnet18_finetune/README.md](resnet18_finetune/README.md). The model checkpoints (`.pth`) are gitignored and are not in the repository.
+See [resnet18_finetunning/README.md](resnet18_finetunning/README.md). The model checkpoints (`.pth`) are gitignored and are not in the repository.

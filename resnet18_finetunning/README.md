@@ -5,10 +5,12 @@ Fine-tuning an ImageNet-pretrained ResNet-18 on the HAM10000 skin-lesion dataset
 ## Layout
 
 ```
-resnet18_finetune/
+resnet18_finetunning/
 ├── make_splits.py            # builds the fixed 70/15/15 split in splits/
 ├── finetune_resnet18.py      # fine-tunes ResNet-18 from a config
 ├── configs/
+│   ├── baseline.yaml         # 10 epochs, standard augmentation (no fixed split)
+│   ├── standard_cosine25.yaml  # 25 epochs, cosine LR schedule (no fixed split)
 │   ├── strong_aug.yaml       # strong augmentation
 │   └── strong_cosine25.yaml  # strong augmentation, 25 epochs, cosine LR schedule
 ├── splits/                   # split CSVs, summary, config and integrity report
@@ -21,7 +23,7 @@ resnet18_finetune/
 ## Setup
 
 ```bash
-cd resnet18_finetune
+cd resnet18_finetunning
 python -m venv venv
 venv\Scripts\activate          # Windows  (Linux/macOS: source venv/bin/activate)
 pip install -r requirements.txt   # also installs src/ham10000 as a package

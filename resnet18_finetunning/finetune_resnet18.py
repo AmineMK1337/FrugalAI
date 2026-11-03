@@ -162,7 +162,7 @@ def main():
             best_val_loss = val_loss
             best_epoch = epoch + 1
             torch.save(model.state_dict(), str(checkpoint_path))
-            # Also save in the working directory (skin-lesion-classification/), where evaluation.ipynb loads it
+            # Also save in the working directory (resnet18_finetunning/)
             torch.save(model.state_dict(), CHECKPOINT_NAME)
             print(f'  -> Best model saved (val_loss={val_loss:.4f})')
 
