@@ -1,0 +1,36 @@
+{
+  "tolerance": 0.1,
+  "before": {
+    "FP32": {
+      "model": "results/strong_cosine25_resnet18/resnet18_baseline.pth",
+      "median_ms": 20.78600000095321,
+      "p95_ms": 27.53621499505243,
+      "runs": 200
+    },
+    "INT8-PTQ": {
+      "model": "results/ptq_int8/resnet18_ptq_int8.pt",
+      "median_ms": 6.046300004527438,
+      "p95_ms": 8.197160010604419,
+      "runs": 200
+    }
+  },
+  "after": {
+    "FP32": {
+      "model": "results/strong_cosine25_resnet18/resnet18_baseline.pth",
+      "median_ms": 21.14034999976866,
+      "p95_ms": 44.461635003972326,
+      "runs": 200
+    },
+    "INT8-PTQ": {
+      "model": "results/ptq_int8/resnet18_ptq_int8.pt",
+      "median_ms": 5.933200001891237,
+      "p95_ms": 7.268770003429379,
+      "runs": 200
+    }
+  },
+  "relative_change": {
+    "FP32": 0.017047531934917703,
+    "INT8-PTQ": -0.01870565511991018
+  },
+  "stable": true
+}

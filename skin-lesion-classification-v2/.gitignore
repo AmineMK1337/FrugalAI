@@ -1,0 +1,37 @@
+# Virtual environments
+venv/
+.venv/
+
+# Python cache & packaging
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dataset (download HAM10000 separately, see README)
+dataset/
+skin-lesion-classification/data/
+
+# Model checkpoints: FP32 .pth (44 MB, finetune_resnet18.py); INT8 .pt (11 MB, quantize_ptq.py / train_qat.py)
+*.pth
+*.pt
+
+# Experiment tracking & logs
+wandb/
+emissions.csv
+*.log

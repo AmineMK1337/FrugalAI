@@ -1,0 +1,33 @@
+class,partition,images,lesions,pct_of_class_images,pct_of_class_lesions,pct_of_partition_images
+akiec,train,222,159,67.89,69.74,3.18
+akiec,validation,53,34,16.21,14.91,3.46
+akiec,test,52,35,15.9,15.35,3.46
+akiec,total,327,228,100.0,100.0,3.27
+bcc,train,361,229,70.23,70.03,5.17
+bcc,validation,82,49,15.95,14.98,5.35
+bcc,test,71,49,13.81,14.98,4.73
+bcc,total,514,327,100.0,100.0,5.13
+bkl,train,772,509,70.25,70.01,11.06
+bkl,validation,160,109,14.56,14.99,10.44
+bkl,test,167,109,15.2,14.99,11.12
+bkl,total,1099,727,100.0,100.0,10.97
+df,train,71,51,61.74,69.86,1.02
+df,validation,24,11,20.87,15.07,1.57
+df,test,20,11,17.39,15.07,1.33
+df,total,115,73,100.0,100.0,1.15
+mel,train,773,430,69.45,70.03,11.07
+mel,validation,173,92,15.54,14.98,11.29
+mel,test,167,92,15.0,14.98,11.12
+mel,total,1113,614,100.0,100.0,11.11
+nv,train,4683,3782,69.84,70.0,67.08
+nv,validation,1018,810,15.18,14.99,66.45
+nv,test,1004,811,14.97,15.01,66.84
+nv,total,6705,5403,100.0,100.0,66.95
+vasc,train,99,69,69.72,70.41,1.42
+vasc,validation,22,15,15.49,15.31,1.44
+vasc,test,21,14,14.79,14.29,1.4
+vasc,total,142,98,100.0,100.0,1.42
+all classes,train,6981,5229,69.71,70.0,100.0
+all classes,validation,1532,1120,15.3,14.99,100.0
+all classes,test,1502,1121,15.0,15.01,100.0
+all classes,total,10015,7470,100.0,100.0,100.0

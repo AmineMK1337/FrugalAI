@@ -1,0 +1,14 @@
+{
+  "python_version": "3.11.6 (main, Apr 10 2024, 17:26:07) [GCC 13.2.0]",
+  "torch_version": "2.12.0+cu126",
+  "torchvision_version": "0.27.0+cu126",
+  "cuda_available": true,
+  "cuda_version": "12.6",
+  "gpu_name": "NVIDIA A40-24Q",
+  "gpu_memory_mb": 25545.0,
+  "sklearn_version": "1.8.0",
+  "pandas_version": "3.0.3",
+  "matplotlib_version": "3.10.9",
+  "numpy_version": "2.4.6",
+  "platform": "linux"
+}

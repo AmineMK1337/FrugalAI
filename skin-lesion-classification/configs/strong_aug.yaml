@@ -1,0 +1,26 @@
+seed: 42
+
+metadata_csv: "../dataset/HAM10000_metadata"
+data_dir: "../dataset"
+
+# Data
+image_size: 224
+train_test_split: 0.8   # train fraction; the rest is split evenly into val and test
+num_workers: 4
+
+# Model
+model_name: "resnet18"
+num_classes: 7
+
+#Training
+batch_size: 32
+num_epochs: 10
+learning_rate: 0.0001
+optimizer: "adam"
+
+use_class_weights: true
+
+use_augmentation: true
+augmentation: "strong"   # full rotations, vertical flips, wider crops (see data.py)
+
+use_wandb: false

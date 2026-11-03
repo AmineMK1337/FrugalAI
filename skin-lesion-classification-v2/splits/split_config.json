@@ -1,0 +1,49 @@
+{
+  "script": "make_splits.py",
+  "script_version": "1.0",
+  "seed": 42,
+  "target_proportions_of_lesions": {
+    "train": 0.7,
+    "validation": 0.15,
+    "test": 0.15
+  },
+  "method": "lesion-level split stratified by dx: sklearn train_test_split on the lesion table (one row per lesion_id, sorted) with stratify=dx; first train vs rest, then rest into validation vs test; every image follows its lesion. No patient-level grouping (HAM10000 has no patient id).",
+  "metadata_file": "../dataset/HAM10000_metadata",
+  "metadata_separator": "comma",
+  "image_dir": "../dataset",
+  "dataset_counts": {
+    "images": 10015,
+    "lesions": 7470,
+    "classes": {
+      "akiec": 327,
+      "bcc": 514,
+      "bkl": 1099,
+      "df": 115,
+      "mel": 1113,
+      "nv": 6705,
+      "vasc": 142
+    }
+  },
+  "partition_counts": {
+    "train": {
+      "images": 6981,
+      "lesions": 5229
+    },
+    "validation": {
+      "images": 1532,
+      "lesions": 1120
+    },
+    "test": {
+      "images": 1502,
+      "lesions": 1121
+    }
+  },
+  "sha256": {
+    "train.csv": "7b69faa944b5525be899e9aebafcd14109116e6040cbc3629325d926e1ebd351",
+    "validation.csv": "47f3874eb4bf2aba4165fe107e092131e18e9bba45a32c6f76def10191227738",
+    "test.csv": "3a1b382f31816a031f985a966d8eec8e5cb2d25ca9a06e141fe06e3179687a4a",
+    "ham10000_splits.csv": "d7b17a1900f233db66a2e76d66eea333863404c53ea4fa2c154dbecd6cfe4f82",
+    "split_summary.csv": "427c12c9d3e02cacf5cf9856d3c29404d99400f148c7eaaf57b5b0706e80a8f2"
+  },
+  "all_checks_passed": true
+}

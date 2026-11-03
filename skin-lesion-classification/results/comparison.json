@@ -1,0 +1,173 @@
+{
+  "test_images": 1035,
+  "runs": {
+    "A: standard aug, 10 ep": {
+      "dir": "baseline_resnet18",
+      "best_epoch": 9,
+      "best_val_loss": 0.601309,
+      "train_time_s": 765.1,
+      "accuracy": 0.7903381642512077,
+      "balanced_accuracy": 0.6757526435521354,
+      "macro_precision": 0.6479507776067901,
+      "macro_recall": 0.6757526435521354,
+      "macro_f1": 0.6535862710449545,
+      "weighted_f1": 0.7978204404669312,
+      "macro_auc": 0.9446342196273572,
+      "per_class_f1": {
+        "akiec": 0.5753,
+        "bcc": 0.7248,
+        "bkl": 0.6803,
+        "df": 0.4118,
+        "mel": 0.5412,
+        "nv": 0.8917,
+        "vasc": 0.75
+      },
+      "per_class_recall": {
+        "akiec": 0.6,
+        "bcc": 0.72,
+        "bkl": 0.6434,
+        "df": 0.35,
+        "mel": 0.697,
+        "nv": 0.8627,
+        "vasc": 0.8571
+      },
+      "vs_reference": {
+        "macro_f1_diff_ci95": [
+          0.0,
+          0.0
+        ],
+        "accuracy_diff_ci95": [
+          0.0,
+          0.0
+        ],
+        "p_macro_f1_better": 0.0
+      }
+    },
+    "B: strong aug, 10 ep": {
+      "dir": "strong_aug_resnet18",
+      "best_epoch": 9,
+      "best_val_loss": 0.549418,
+      "train_time_s": 1822.6,
+      "accuracy": 0.7681159420289855,
+      "balanced_accuracy": 0.6959864565981431,
+      "macro_precision": 0.6348625360738099,
+      "macro_recall": 0.6959864565981431,
+      "macro_f1": 0.6471737341147163,
+      "weighted_f1": 0.7851679619837544,
+      "macro_auc": 0.9534148667447686,
+      "per_class_f1": {
+        "akiec": 0.5641,
+        "bcc": 0.7547,
+        "bkl": 0.6389,
+        "df": 0.4615,
+        "mel": 0.5016,
+        "nv": 0.8821,
+        "vasc": 0.7273
+      },
+      "per_class_recall": {
+        "akiec": 0.6286,
+        "bcc": 0.8,
+        "bkl": 0.5349,
+        "df": 0.45,
+        "mel": 0.7778,
+        "nv": 0.8235,
+        "vasc": 0.8571
+      },
+      "vs_reference": {
+        "macro_f1_diff_ci95": [
+          -0.052,
+          0.0425
+        ],
+        "accuracy_diff_ci95": [
+          -0.0454,
+          0.001
+        ],
+        "p_macro_f1_better": 0.427
+      }
+    },
+    "C: standard aug, 25 ep cosine": {
+      "dir": "standard_cosine25_resnet18",
+      "best_epoch": 8,
+      "best_val_loss": 0.618264,
+      "train_time_s": 1781.2,
+      "accuracy": 0.7468599033816425,
+      "balanced_accuracy": 0.6646182163438368,
+      "macro_precision": 0.6046249654404948,
+      "macro_recall": 0.6646182163438368,
+      "macro_f1": 0.6175747570690788,
+      "weighted_f1": 0.7654656465411169,
+      "macro_auc": 0.9403539470747148,
+      "per_class_f1": {
+        "akiec": 0.5185,
+        "bcc": 0.6759,
+        "bkl": 0.692,
+        "df": 0.375,
+        "mel": 0.4755,
+        "nv": 0.8588,
+        "vasc": 0.7273
+      },
+      "per_class_recall": {
+        "akiec": 0.6,
+        "bcc": 0.6533,
+        "bkl": 0.7752,
+        "df": 0.3,
+        "mel": 0.6869,
+        "nv": 0.7798,
+        "vasc": 0.8571
+      },
+      "vs_reference": {
+        "macro_f1_diff_ci95": [
+          -0.0798,
+          0.0072
+        ],
+        "accuracy_diff_ci95": [
+          -0.0667,
+          -0.0203
+        ],
+        "p_macro_f1_better": 0.047
+      }
+    },
+    "D: strong aug, 25 ep cosine": {
+      "dir": "strong_cosine25_resnet18",
+      "best_epoch": 25,
+      "best_val_loss": 0.511371,
+      "train_time_s": 1903.8,
+      "accuracy": 0.8144927536231884,
+      "balanced_accuracy": 0.6987197327025351,
+      "macro_precision": 0.696439383406347,
+      "macro_recall": 0.6987197327025351,
+      "macro_f1": 0.6861959696566896,
+      "weighted_f1": 0.8189779328730464,
+      "macro_auc": 0.9530972556238948,
+      "per_class_f1": {
+        "akiec": 0.5526,
+        "bcc": 0.75,
+        "bkl": 0.6877,
+        "df": 0.5806,
+        "mel": 0.5702,
+        "nv": 0.9122,
+        "vasc": 0.75
+      },
+      "per_class_recall": {
+        "akiec": 0.6,
+        "bcc": 0.76,
+        "bkl": 0.6744,
+        "df": 0.45,
+        "mel": 0.6566,
+        "nv": 0.8929,
+        "vasc": 0.8571
+      },
+      "vs_reference": {
+        "macro_f1_diff_ci95": [
+          -0.0125,
+          0.0792
+        ],
+        "accuracy_diff_ci95": [
+          0.0019,
+          0.0493
+        ],
+        "p_macro_f1_better": 0.92
+      }
+    }
+  }
+}
