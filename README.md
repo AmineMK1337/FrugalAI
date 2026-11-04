@@ -1,6 +1,6 @@
 # FrugalAI
 
-Skin-lesion classification on HAM10000 with a fine-tuned ResNet-18. This page summarizes the work so far. Quantization and efficiency benchmarking will be redone later.
+Skin-lesion classification on HAM 10000 with a fine-tuned ResNet-18. This page summarizes the work so far. Quantization and efficiency benchmarking will be redone later.
 
 ## 1. Dataset
 
