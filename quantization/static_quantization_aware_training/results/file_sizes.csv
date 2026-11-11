@@ -1,0 +1,3 @@
+file,variant,bytes,MB,pct_of_fp32
+resnet18_baseline.pth,FP32,44799179,44.799179,100.0
+resnet18_qat_int8.pt,QAT_INT8,11309113,11.309113,25.244018422748326

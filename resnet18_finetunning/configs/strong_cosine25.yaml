@@ -1,6 +1,6 @@
 seed: 42
 
-metadata_csv: "../dataset/HAM10000_metadata"
+metadata_csv: "../dataset/HAM10000_metadata.csv"
 data_dir: "../dataset"
 
 # Data
