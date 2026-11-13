@@ -63,7 +63,7 @@ Each run's folder in [resnet18_finetunning/results/](resnet18_finetunning/result
 
 ## 5. Evaluation machine and thread protocol
 
-All models (FP32, weight-only INT8, static INT8 PTQ) are evaluated by [evaluation/evaluate.py](evaluation/evaluate.py) on the same validation images, on the same machine, on the CPU only. The exact settings and file hashes of each run are saved in [evaluation/results/run_info.json](evaluation/results/run_info.json).
+All models (FP32, weight-only INT8, static INT8 PTQ) are evaluated by [evaluation/evaluate.py](evaluation/evaluate.py) on the same validation images, on the same machine, on the CPU only, and in the same format, so the only difference between models is the precision (FP32 or INT8). The exact settings and file hashes of each run are saved in [evaluation/results/run_info.json](evaluation/results/run_info.json).
 
 ### The virtual machine
 
@@ -78,11 +78,16 @@ All models (FP32, weight-only INT8, static INT8 PTQ) are evaluated by [evaluatio
 
 The VM exposes no power counter: there is no RAPL for the CPU, and the virtual GPU does not report power. Energy and CO₂e are therefore estimated by CodeCarbon, not measured (see below).
 
-### Measuring at 1, 2, 4 and 8 threads
+### Same format for every model: fused + TorchScript
 
-The thread count is the number of CPU cores PyTorch uses for one inference (`torch.set_num_threads`). Latency, throughput, peak memory, energy and CO₂e depend on it, so each is measured at 1, 2, 4 and 8 threads. Accuracy and the other performance metrics, file size and FLOPs do not depend on it, so they are computed once.
+Every model runs as TorchScript with each convolution fused with its BatchNorm and ReLU. The FP32 and weight-only models are loaded into `torchvision.models.quantization.resnet18` (`quantize=False`), fused with `fuse_model()` and traced with `torch.jit.trace`; the static PTQ model is already fused TorchScript. Before anything is measured, each fused model is compared with its unfused version on the validation set: predictions are 100% identical and logits differ by at most 3e-5 (float rounding) ([fused_vs_unfused_check_validation.csv](evaluation/results/comparison/performance/fused_vs_unfused_check_validation.csv)). Model size is still the size of each model's original file.
 
-- **Main protocol: 1 thread.** It is the most stable and reproducible setting, close to a small device. The 2, 4 and 8-thread results show how each model scales on a multi-core CPU.
+### Measuring at 1 and 4 threads
+
+The thread count is the number of CPU cores PyTorch uses for one inference (`torch.set_num_threads`). Latency, throughput and peak memory depend on it, so each is measured at 1 and 4 threads. Energy and CO₂e are measured at 1 thread. Accuracy and the other performance metrics, file size and FLOPs do not depend on it, so they are computed once.
+
+- **Main protocol: 1 thread.** It is the most stable and reproducible setting, close to a small device. The 4-thread results show how each model scales on a multi-core CPU.
+- **One shared function** measures every model, with the same steps and settings.
 - **One fresh process per measurement.** Each combination of model and thread count runs in a new Python process, so no cache or memory is carried over between runs. Inter-op parallelism is fixed at 1 thread.
 - **3 repeats, interleaved.** The runs go repeat → thread count → model, all back to back in one session. A slowdown of the machine at one moment therefore affects every model, not just one. The reported value is the median of the 3 repeats.
 - **Same inputs.** The validation images are decoded once and saved, and every run reads the same tensors.
@@ -91,14 +96,14 @@ In each run:
 
 | Metric | How it is measured |
 |---|---|
-| Latency | One image (batch 1): 20 warm-up runs, then 300 timed runs. Median and 95th percentile, in ms. |
-| Peak memory | Increase in the process's peak memory while loading the model and running batch-1 inference, in MB. |
+| Latency | One image (batch 1): 30 warm-up runs, then 200 timed runs. Median and 95th percentile, in ms. |
+| Peak RAM | Increase in the process's resident memory (psutil, sampled every millisecond) while loading the model and running the batch-1 warm-up, in MB. |
 | Throughput | All 1,532 validation images in batches of 32, in images per second. |
-| Energy and CO₂e | CodeCarbon (offline, process mode) during the throughput pass, scaled to 1,000 images. CO₂e uses Tunisia's grid intensity, 564 gCO₂e/kWh. |
+| Energy and CO₂e | At 1 thread: CodeCarbon (offline, process mode) over whole passes of the validation set (batch 32) lasting at least 60 s, scaled to 1,000 images. CO₂e uses Tunisia's grid intensity, 564 gCO₂e/kWh. |
 
-**Limit of the energy estimate:** without a power counter, CodeCarbon assumes about 250 W per thread in use. Energy is therefore roughly that power × run time, and it grows with the thread count (about 1,770 W at 8 threads, more than this CPU can draw). Only compare energy and CO₂e between models at the same thread count.
+**Limit of the energy estimate:** without a power counter, CodeCarbon assumes about 250 W per thread in use. Energy is therefore roughly that power × run time: it is an estimate, useful to compare models, not a measured value.
 
-To rerun the evaluation (validation split; about 40 minutes):
+To rerun the evaluation (validation split):
 
 ```
 python evaluation/evaluate.py

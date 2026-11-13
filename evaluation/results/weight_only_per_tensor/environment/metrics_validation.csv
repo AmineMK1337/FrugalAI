@@ -1,2 +1,2 @@
-model,energy_wh_per_1000_1t,co2e_g_per_1000_1t,estimated_power_w_1t,energy_wh_per_1000_2t,co2e_g_per_1000_2t,estimated_power_w_2t,energy_wh_per_1000_4t,co2e_g_per_1000_4t,estimated_power_w_4t,energy_wh_per_1000_8t,co2e_g_per_1000_8t,estimated_power_w_8t,source,grid_g_per_kwh,country
-weight_only_per_tensor,3.3319084166568476,1.8790497430241295,249.60797769463107,3.390666007292822,1.9121864388088308,485.1570625940084,3.5745944297028442,2.0159139761974973,930.3700594148812,3.9874557490362883,2.2487495944035096,1775.8310016599803,estimated (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN
+model,format,threads,energy_wh_per_1000,co2e_g_per_1000,estimated_power_w,seconds_per_run,source,grid_g_per_kwh,country
+weight_only_per_tensor,fused + TorchScript,1,3.3285700702091945,1.8771670625148966,253.37229248851912,72.7318810550496,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN

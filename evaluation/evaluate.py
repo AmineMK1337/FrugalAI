@@ -1,17 +1,20 @@
-"""Evaluate every model on the same data, same inputs and same hardware (CPU), and save the results by
-model and metric type, each CSV next to its plots.
+"""Evaluate every model in the same format, on the same data, inputs and hardware (CPU), and save the results
+by model and metric type, each CSV next to its plots. The only difference between models is the precision.
 
+Format:      every model runs as fused (Conv+BatchNorm+ReLU) TorchScript. FP32 and weight-only models are loaded
+             into torchvision.models.quantization.resnet18 (quantize=False), fused with fuse_model() and traced
+             with torch.jit.trace; static PTQ is already fused TorchScript. Before anything is measured, each
+             fused model is checked against its unfused version (same predictions, logits equal up to rounding).
 Performance: accuracy, precision, recall, specificity, F1, AUC (macro averages, and per class), each with a
              95% bootstrap CI and a paired bootstrap against FP32 (same resamples for both models).
-Efficiency:  size, FLOPs (ptflops MACs x 2), latency (batch 1, median and p95), throughput (batch 32),
-             peak memory, at 1, 2, 4 and 8 threads. Fresh process per run, 20 warm-up + 300 timed runs,
-             3 repeats, models and thread counts interleaved so drift is not tied to one of them.
-Environment: energy and CO2e per 1,000 images, at 1, 2, 4 and 8 threads, ESTIMATED by CodeCarbon. This VM has
-             no RAPL counter, so CodeCarbon assumes a CPU power: compare models, do not quote as measured.
+Efficiency:  size (original file), FLOPs (ptflops MACs x 2, fused FP32 architecture), latency (batch 1, 30
+             warm-up + 200 timed runs, median and p95), throughput (batch 32), peak RAM (psutil), at 1 (main) and
+             4 threads. One shared function measures every model, in a fresh process per run, 3 repeats, models
+             back to back in one session.
+Environment: energy and CO2e per 1,000 images at 1 thread, ESTIMATED by CodeCarbon over at least 60 s per run.
+             This VM has no RAPL counter, so CodeCarbon assumes a CPU power: compare models, do not quote as measured.
 
-Models: fp32, weight_only_per_channel, weight_only_per_tensor, static_ptq (seed-42 calibration). To add a
-model, add an entry to MODELS. Nothing is trained, calibrated or modified; model files, split and config are
-hashed before and after the run.
+Nothing is trained, calibrated or modified; model files, split and config are hashed before and after the run.
 
 Usage: python evaluation/evaluate.py [--split validation|test] [--repeats 3] [--country TUN]
 Writes evaluation/results/<model>/<metric_type>/, evaluation/results/comparison/<metric_type>/ and
@@ -28,6 +31,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -35,9 +39,11 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""  # same hardware for every model: CPU
 
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
+import psutil  # noqa: E402
 import torch  # noqa: E402
 from sklearn.metrics import precision_recall_fscore_support, roc_auc_score  # noqa: E402
 from torchvision.models import resnet18  # noqa: E402
+from torchvision.models.quantization import resnet18 as quantizable_resnet18  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -58,43 +64,101 @@ PER_CHANNEL = WEIGHT_ONLY / "results/resnet18_w8_perchannel.pt"
 PER_TENSOR = WEIGHT_ONLY / "results/resnet18_w8_pertensor.pt"
 STATIC_INT8 = STATIC / "resnet18_static_int8.pt"
 NUM_CLASSES = 7
+FORMAT = "fused + TorchScript"
 BATCH_SIZE = 32
-WARMUP, LATENCY_RUNS = 20, 300
-THREADS = (1, 2, 4, 8)  # 1 = main protocol
+WARMUP, LATENCY_RUNS = 30, 200
+THREADS = (1, 4)  # 1 = main protocol
+ENERGY_THREADS, ENERGY_MIN_SECONDS = 1, 60
 BOOTSTRAP, BOOTSTRAP_SEED = 1000, 0
 ENGINE = "x86"
 PERFORMANCE = ("accuracy", "precision_macro", "recall_macro", "specificity_macro", "f1_macro", "auc_macro")
+LOGIT_TOLERANCE = 1e-3  # fused vs unfused: float rounding only gives differences far below this
 
 
-def load_fp32():
+# ── Models ───────────────────────────────────────────────────────────────────
+
+def fp32_state():
+    return torch.load(CHECKPOINT, map_location="cpu", weights_only=True)
+
+
+def weight_only_state(path):
+    return lambda: q.dequantize_weights(q.load_compressed(path))
+
+
+def fused_torchscript(state):
+    """FP32 weights in the quantizable ResNet-18 (quantize=False), BatchNorm and ReLU fused, traced."""
+    model = quantizable_resnet18(weights=None, quantize=False, num_classes=NUM_CLASSES)
+    model.load_state_dict(state, strict=True)
+    model.eval().fuse_model()
+    with torch.no_grad():
+        return torch.jit.trace(model, torch.zeros(1, 3, 224, 224))
+
+
+def unfused_fp32():
     model = resnet18(weights=None, num_classes=NUM_CLASSES)
-    model.load_state_dict(torch.load(CHECKPOINT, map_location="cpu", weights_only=True), strict=True)
+    model.load_state_dict(fp32_state(), strict=True)
     return model.eval()
 
 
-def load_weight_only(path):
-    return lambda: q.load_dequantized_resnet18(path, NUM_CLASSES)
-
-
-def load_static():
-    torch.backends.quantized.engine = ENGINE
-    return torch.jit.load(str(STATIC_INT8), map_location="cpu").eval()
-
-
-MODELS = {  # name: loader, file on disk, note
-    "fp32": dict(load=load_fp32, file=CHECKPOINT, note="FP32 eager PyTorch"),
-    "weight_only_per_channel": dict(load=load_weight_only(PER_CHANNEL), file=PER_CHANNEL,
-                                    note="INT8 weights on disk, dequantized to FP32 at load: computes in FP32"),
-    "weight_only_per_tensor": dict(load=load_weight_only(PER_TENSOR), file=PER_TENSOR,
-                                   note="INT8 weights on disk, dequantized to FP32 at load: computes in FP32"),
-    "static_ptq": dict(load=load_static, file=STATIC_INT8,
-                       note="INT8 TorchScript (x86), BatchNorm fused, seed-42 calibration; FLOPs counted on the "
-                            "FP32 architecture because ptflops cannot count quantized TorchScript"),
+MODELS = {  # name: weights (None = already TorchScript), unfused reference, file on disk, note
+    "fp32": dict(state=fp32_state, unfused=unfused_fp32, file=CHECKPOINT, note="FP32"),
+    "weight_only_per_channel": dict(
+        state=weight_only_state(PER_CHANNEL), unfused=lambda: q.load_dequantized_resnet18(PER_CHANNEL, NUM_CLASSES),
+        file=PER_CHANNEL, note="INT8 weights on disk, dequantized to FP32 at load: computes in FP32"),
+    "weight_only_per_tensor": dict(
+        state=weight_only_state(PER_TENSOR), unfused=lambda: q.load_dequantized_resnet18(PER_TENSOR, NUM_CLASSES),
+        file=PER_TENSOR, note="INT8 weights on disk, dequantized to FP32 at load: computes in FP32"),
+    "static_ptq": dict(state=None, unfused=None, file=STATIC_INT8,
+                       note="INT8 weights and activations (x86 engine), seed-42 calibration"),
 }
+
+
+def export_torchscript(workdir):
+    """Path of each model's fused TorchScript file. Static PTQ already is one; the others are traced here."""
+    paths = {}
+    for name, spec in MODELS.items():
+        if spec["state"] is None:
+            paths[name] = STATIC_INT8
+        else:
+            paths[name] = Path(workdir) / f"{name}.pt"
+            torch.jit.save(fused_torchscript(spec["state"]()), paths[name])
+    return paths
+
+
+def load_torchscript(path):
+    torch.backends.quantized.engine = ENGINE
+    return torch.jit.load(str(path), map_location="cpu").eval()
 
 
 def sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+@torch.inference_mode()
+def logits(model, images):
+    return torch.cat([model(b) for b in images.split(BATCH_SIZE)])
+
+
+def check_fused(paths, images):
+    """Each fused FP32 / weight-only model must give the predictions of its unfused version."""
+    rows = []
+    for name, spec in MODELS.items():
+        if spec["unfused"] is None:
+            continue
+        before, after = logits(spec["unfused"](), images), logits(load_torchscript(paths[name]), images)
+        rows.append({"model": name, "n_images": len(images),
+                     "identical_predictions_pct": float((before.argmax(1) == after.argmax(1)).float().mean() * 100),
+                     "max_abs_logit_difference": float((before - after).abs().max()),
+                     "max_abs_probability_difference": float((before.softmax(1) - after.softmax(1)).abs().max())})
+        print(f"fused check, {name}: {rows[-1]['identical_predictions_pct']:.2f}% identical predictions, "
+              f"max logit difference {rows[-1]['max_abs_logit_difference']:.2e}", flush=True)
+    table = pd.DataFrame(rows)
+    bad = table[(table["identical_predictions_pct"] < 100) | (table["max_abs_logit_difference"] > LOGIT_TOLERANCE)]
+    if len(bad):
+        print(table.to_string(index=False))
+        sys.exit(f"CHECK FAILED: fused models differ from their unfused versions by more than rounding: "
+                 f"{list(bad['model'])}")
+    return table
 
 
 # ── Performance ──────────────────────────────────────────────────────────────
@@ -160,76 +224,108 @@ def static_seed_summary():
 
 
 def check_against_earlier_results(overall):
-    """The models did not change, so performance must equal the results saved when they were made."""
+    """Fusing changes only rounding, so performance must equal the results saved when the models were made
+    (exactly for prediction-based metrics; AUC, which uses probabilities, up to 1e-4)."""
+    tolerance = {m: 1e-9 for m in PERFORMANCE} | {"auc_macro": 1e-4}
     weight_only = pd.read_csv(WEIGHT_ONLY / "results/validation_results.csv").set_index("model")
     for name, old in (("fp32", "FP32"), ("weight_only_per_channel", "per_channel"),
                       ("weight_only_per_tensor", "per_tensor")):
         for metric, old_metric in (("accuracy", "accuracy"), ("f1_macro", "macro_f1")):
-            if abs(overall[name][metric] - weight_only.loc[old, old_metric]) > 1e-9:
+            if abs(overall[name][metric] - weight_only.loc[old, old_metric]) > tolerance[metric]:
                 sys.exit(f"CHECK FAILED: {name} {metric} differs from {WEIGHT_ONLY}/results")
     static = pd.read_csv(STATIC / "results/validation_results.csv").set_index("model")
     for name, old in (("fp32", "FP32"), ("static_ptq", "INT8_seed42")):
         for metric in PERFORMANCE:
-            if abs(overall[name][metric] - static.loc[old, metric]) > 1e-9:
+            if abs(overall[name][metric] - static.loc[old, metric]) > tolerance[metric]:
                 sys.exit(f"CHECK FAILED: {name} {metric} differs from {STATIC}/results")
     print("Performance matches the results saved when the models were made", flush=True)
 
 
-# ── Efficiency and environment: one fresh process per run ────────────────────
+# ── Efficiency and environment: one shared function, one fresh process per run ─
 
-def memory_kb(field):
-    for line in Path("/proc/self/status").read_text().splitlines():
-        if line.startswith(field):
-            return int(line.split()[1])
-    raise RuntimeError(f"{field} not found")
+class PeakRSS:
+    """Highest resident memory of this process (psutil), sampled every millisecond while active."""
+
+    def __enter__(self):
+        self.process, self.stop = psutil.Process(), threading.Event()
+        self.peak = self.process.memory_info().rss
+        self.thread = threading.Thread(target=self.sample, daemon=True)
+        self.thread.start()
+        return self
+
+    def sample(self):
+        while not self.stop.is_set():
+            self.peak = max(self.peak, self.process.memory_info().rss)
+            time.sleep(0.001)
+
+    def __exit__(self, *_):
+        self.stop.set()
+        self.thread.join()
+        self.peak = max(self.peak, self.process.memory_info().rss)
 
 
 @torch.inference_mode()
-def worker(args):
-    torch.set_num_threads(args.threads)
+def measure(model_path, threads, workdir, country):
+    """The same measurement for every model: batch-1 latency and peak RAM, batch-32 throughput, and energy
+    (CodeCarbon, at ENERGY_THREADS only) over full passes of the cached validation tensors."""
+    torch.set_num_threads(threads)
     torch.set_num_interop_threads(1)
-    sample = torch.load(Path(args.workdir) / "sample.pt", weights_only=True)
-    before = memory_kb("VmRSS")
-    model = MODELS[args.worker]["load"]()
-
-    for _ in range(WARMUP):
-        model(sample)
+    sample = torch.load(Path(workdir) / "sample.pt", weights_only=True)
+    before = psutil.Process().memory_info().rss
+    with PeakRSS() as memory:  # load + batch-1 warm-up
+        model = load_torchscript(model_path)
+        for _ in range(WARMUP):
+            model(sample)
     times = []
     for _ in range(LATENCY_RUNS):
         start = time.perf_counter()
         model(sample)
         times.append((time.perf_counter() - start) * 1000)
-    peak_mb = (memory_kb("VmHWM") - before) / 1024  # load + batch-1 inference, before the image tensor is opened
+    result = {"latency_median_ms": float(np.median(times)), "latency_p95_ms": float(np.percentile(times, 95)),
+              "peak_memory_mb": (memory.peak - before) / 2 ** 20, "latency_samples_ms": times}
 
-    from codecarbon import OfflineEmissionsTracker
-    images = torch.load(Path(args.workdir) / "images.pt", weights_only=True, mmap=True)
+    images = torch.load(Path(workdir) / "images.pt", weights_only=True)
     batches = [images[i:i + BATCH_SIZE].clone() for i in range(0, len(images), BATCH_SIZE)]
-    tracker = OfflineEmissionsTracker(country_iso_code=args.country, measure_power_secs=1, tracking_mode="process",
-                                      save_to_file=False, log_level="critical", allow_multiple_runs=True)
-    tracker.start()
+    for batch in (batches[0], batches[-1]) * 3:  # TorchScript specializes on the first calls of each shape
+        model(batch)
     start = time.perf_counter()
     for batch in batches:
         model(batch)
-    seconds = time.perf_counter() - start
-    tracker.stop()
-    data = tracker.final_emissions_data
-    per_1000 = 1000 / len(images)
-    Path(args.out).write_text(json.dumps({
-        "latency_median_ms": float(np.median(times)), "latency_p95_ms": float(np.percentile(times, 95)),
-        "throughput_img_s": len(images) / seconds, "peak_memory_mb": peak_mb,
-        "energy_wh_per_1000": data.energy_consumed * 1000 * per_1000,
-        "co2e_g_per_1000": data.emissions * 1000 * per_1000,
-        "estimated_power_w": data.cpu_power + data.ram_power,
-        "grid_g_per_kwh": data.emissions / data.energy_consumed * 1000,
-        "latency_samples_ms": times,
-    }))
+    result["throughput_img_s"] = len(images) / (time.perf_counter() - start)
+
+    if threads == ENERGY_THREADS:
+        from codecarbon import OfflineEmissionsTracker
+        tracker = OfflineEmissionsTracker(country_iso_code=country, measure_power_secs=1, tracking_mode="process",
+                                          save_to_file=False, log_level="critical", allow_multiple_runs=True)
+        tracker.start()
+        start, n = time.perf_counter(), 0
+        while time.perf_counter() - start < ENERGY_MIN_SECONDS:  # whole passes until at least 60 s
+            for batch in batches:
+                model(batch)
+            n += len(images)
+        seconds = time.perf_counter() - start
+        tracker.stop()
+        data = tracker.final_emissions_data
+        result.update({"energy_seconds": seconds, "energy_images": n,
+                       "energy_wh_per_1000": data.energy_consumed * 1000 * 1000 / n,
+                       "co2e_g_per_1000": data.emissions * 1000 * 1000 / n,
+                       "estimated_power_w": data.cpu_power + data.ram_power,
+                       "grid_g_per_kwh": data.emissions / data.energy_consumed * 1000})
+    return result
 
 
-def flops(name):
+def worker(args):
+    Path(args.out).write_text(json.dumps(measure(args.model_path, args.threads, args.workdir, args.country)))
+
+
+def flops():
+    """Same for every model: the fused FP32 architecture (ptflops cannot count TorchScript or INT8 ops)."""
     from ptflops import get_model_complexity_info
-    counted = name if name != "static_ptq" else "fp32"  # quantized TorchScript cannot be counted
-    macs, _ = get_model_complexity_info(MODELS[counted]["load"](), (3, 224, 224), as_strings=False,
-                                        print_per_layer_stat=False, verbose=False)
+    model = quantizable_resnet18(weights=None, quantize=False, num_classes=NUM_CLASSES)
+    model.load_state_dict(fp32_state(), strict=True)
+    model.eval().fuse_model()
+    macs, _ = get_model_complexity_info(model, (3, 224, 224), as_strings=False, print_per_layer_stat=False,
+                                        verbose=False)
     return 2 * macs / 1e9
 
 
@@ -254,84 +350,92 @@ def main(args):
     images, labels = map(torch.cat, zip(*loader))
     y = labels.numpy()
     print(f"{split}: {len(y)} images, classes {classes}", flush=True)
-    for folder in [RESULTS / m for m in MODELS] + [RESULTS / "comparison"]:
-        shutil.rmtree(folder, ignore_errors=True)  # outputs of an earlier run of this script
 
-    # Performance
-    probs = {}
-    with torch.inference_mode():
-        for name, spec in MODELS.items():
-            model = spec["load"]()
-            probs[name] = torch.cat([model(b).softmax(1) for b in images.split(BATCH_SIZE)]).numpy()
-    for name in MODELS:
-        check_scores(y, probs[name], len(classes))
-    boot = bootstrap(probs, y, len(classes))
-    overall = {}
-    for name in MODELS:
-        point, per_class = scores(y, probs[name], len(classes))
-        metrics = {"model": name}
-        for metric in PERFORMANCE:
-            metrics[metric] = float(point[metric])
-            metrics[f"{metric}_ci_low"], metrics[f"{metric}_ci_high"] = ci(boot[name][metric])
-        for metric in PERFORMANCE if name != "fp32" else ():
-            diff = boot[name][metric] - boot["fp32"][metric]
-            metrics[f"{metric}_change_vs_fp32"] = metrics[metric] - overall["fp32"][metric]
-            metrics[f"{metric}_change_ci_low"], metrics[f"{metric}_change_ci_high"] = ci(diff)
-            metrics[f"{metric}_paired_bootstrap_p"] = float(min(1.0, 2 * min((diff <= 0).mean(), (diff >= 0).mean())))
-        metrics["n_images"] = len(y)
-        metrics["note"] = MODELS[name]["note"]
-        overall[name] = metrics
-        folder = RESULTS / name / "performance"
-        save_csv(pd.DataFrame([metrics]), folder, "metrics", split)
-        save_csv(pd.DataFrame({"class": classes, **per_class}), folder, "per_class", split)
-    if split == "validation":
-        check_against_earlier_results(overall)
-        save_csv(static_seed_summary(), RESULTS / "static_ptq" / "performance", "seed_summary", split)
-
-    # Efficiency and environment: every model and thread count, back to back, in this session
-    rows, samples = [], []
     with tempfile.TemporaryDirectory(dir=RESULTS) as workdir:
+        paths = export_torchscript(workdir)
+        fused_check = check_fused(paths, images)
+        if args.check_only:
+            print(fused_check.to_string(index=False))
+            return
+        for folder in [RESULTS / m for m in MODELS] + [RESULTS / "comparison"]:
+            shutil.rmtree(folder, ignore_errors=True)  # outputs of an earlier run of this script
+        save_csv(fused_check, RESULTS / "comparison" / "performance", "fused_vs_unfused_check", split)
+
+        # Performance, from the same TorchScript files that are timed below
+        probs = {name: logits(load_torchscript(paths[name]), images).softmax(1).numpy() for name in MODELS}
+        for name in MODELS:
+            check_scores(y, probs[name], len(classes))
+        boot = bootstrap(probs, y, len(classes))
+        overall = {}
+        for name in MODELS:
+            point, per_class = scores(y, probs[name], len(classes))
+            metrics = {"model": name, "format": FORMAT}
+            for metric in PERFORMANCE:
+                metrics[metric] = float(point[metric])
+                metrics[f"{metric}_ci_low"], metrics[f"{metric}_ci_high"] = ci(boot[name][metric])
+            for metric in PERFORMANCE if name != "fp32" else ():
+                diff = boot[name][metric] - boot["fp32"][metric]
+                metrics[f"{metric}_change_vs_fp32"] = metrics[metric] - overall["fp32"][metric]
+                metrics[f"{metric}_change_ci_low"], metrics[f"{metric}_change_ci_high"] = ci(diff)
+                metrics[f"{metric}_paired_bootstrap_p"] = float(min(1.0, 2 * min((diff <= 0).mean(),
+                                                                                 (diff >= 0).mean())))
+            metrics["n_images"] = len(y)
+            metrics["note"] = MODELS[name]["note"]
+            overall[name] = metrics
+            folder = RESULTS / name / "performance"
+            save_csv(pd.DataFrame([metrics]), folder, "metrics", split)
+            save_csv(pd.DataFrame({"class": classes, **per_class}), folder, "per_class", split)
+        if split == "validation":
+            check_against_earlier_results(overall)
+            save_csv(static_seed_summary(), RESULTS / "static_ptq" / "performance", "seed_summary", split)
+
+        # Efficiency and environment: every model and thread count, back to back, in this session
+        rows, samples = [], []
         torch.save(images, Path(workdir) / "images.pt")
         torch.save(images[:1].clone(), Path(workdir) / "sample.pt")
         for repeat in range(args.repeats):
             for threads in THREADS:
                 for name in MODELS:
                     result = Path(workdir) / "result.json"
-                    subprocess.run([sys.executable, __file__, "--worker", name, "--threads", str(threads),
-                                    "--workdir", workdir, "--out", str(result), "--country", args.country],
-                                   check=True, stderr=subprocess.DEVNULL)
+                    subprocess.run([sys.executable, __file__, "--worker", "--model-path", str(paths[name]),
+                                    "--threads", str(threads), "--workdir", workdir, "--out", str(result),
+                                    "--country", args.country], check=True, stderr=subprocess.DEVNULL)
                     run = json.loads(result.read_text())
                     samples += [{"model": name, "threads": threads, "repeat": repeat, "run": i, "latency_ms": t}
                                 for i, t in enumerate(run.pop("latency_samples_ms"))]
-                    rows.append({"model": name, "threads": threads, "repeat": repeat, **run})
+                    rows.append({"model": name, "format": FORMAT, "threads": threads, "repeat": repeat, **run})
                     print(f"repeat {repeat + 1}/{args.repeats}, {threads} thread(s), {name}: "
-                          f"{run['latency_median_ms']:.2f} ms, {run['throughput_img_s']:.1f} img/s", flush=True)
+                          f"{run['latency_median_ms']:.2f} ms, {run['throughput_img_s']:.1f} img/s"
+                          + (f", {run['energy_wh_per_1000']:.3f} Wh/1000 (estimate)" if "energy_wh_per_1000" in run
+                             else ""), flush=True)
     runs = pd.DataFrame(rows)
     samples = pd.DataFrame(samples)
-    medians = runs.drop(columns="repeat").groupby(["model", "threads"]).median()
+    medians = runs.drop(columns=["repeat", "format"]).groupby(["model", "threads"]).median()
+    energy_columns = ["energy_seconds", "energy_images", "energy_wh_per_1000", "co2e_g_per_1000",
+                      "estimated_power_w", "grid_g_per_kwh"]
+    gflops = flops()
 
     for name in MODELS:
-        efficiency = {"model": name, "size_mb": MODELS[name]["file"].stat().st_size / 1e6, "gflops": flops(name)}
-        environment = {"model": name}
+        efficiency = {"model": name, "format": FORMAT, "size_mb": MODELS[name]["file"].stat().st_size / 1e6,
+                      "gflops": gflops}
         for t in THREADS:
             m = medians.loc[(name, t)]
             efficiency.update({f"latency_median_ms_{t}t": m["latency_median_ms"],
                                f"latency_p95_ms_{t}t": m["latency_p95_ms"],
                                f"throughput_img_s_{t}t": m["throughput_img_s"],
                                f"peak_memory_mb_{t}t": m["peak_memory_mb"]})
-            environment.update({f"energy_wh_per_1000_{t}t": m["energy_wh_per_1000"],
-                                f"co2e_g_per_1000_{t}t": m["co2e_g_per_1000"],
-                                f"estimated_power_w_{t}t": m["estimated_power_w"]})
         efficiency["note"] = MODELS[name]["note"]
-        environment.update({"source": "estimated (CodeCarbon process mode; no RAPL counter on this VM)",
-                            "grid_g_per_kwh": medians.loc[(name, 1), "grid_g_per_kwh"], "country": args.country})
+        m = medians.loc[(name, ENERGY_THREADS)]
+        environment = {"model": name, "format": FORMAT, "threads": ENERGY_THREADS,
+                       "energy_wh_per_1000": m["energy_wh_per_1000"], "co2e_g_per_1000": m["co2e_g_per_1000"],
+                       "estimated_power_w": m["estimated_power_w"], "seconds_per_run": m["energy_seconds"],
+                       "source": "estimate (CodeCarbon process mode; no RAPL counter on this VM)",
+                       "grid_g_per_kwh": m["grid_g_per_kwh"], "country": args.country}
+        mine = runs[runs["model"] == name]
         save_csv(pd.DataFrame([efficiency]), RESULTS / name / "efficiency", "metrics", split)
         save_csv(samples[samples["model"] == name], RESULTS / name / "efficiency", "latency_samples", split)
-        save_csv(runs[runs["model"] == name].drop(columns=["energy_wh_per_1000", "co2e_g_per_1000",
-                                                           "estimated_power_w", "grid_g_per_kwh"]),
-                 RESULTS / name / "efficiency", "runs", split)
-        save_csv(runs[runs["model"] == name][["model", "threads", "repeat", "energy_wh_per_1000", "co2e_g_per_1000",
-                                              "estimated_power_w", "grid_g_per_kwh"]],
+        save_csv(mine.drop(columns=energy_columns), RESULTS / name / "efficiency", "runs", split)
+        save_csv(mine[mine["threads"] == ENERGY_THREADS][["model", "format", "threads", "repeat", *energy_columns]],
                  RESULTS / name / "environment", "runs", split)
         save_csv(pd.DataFrame([environment]), RESULTS / name / "environment", "metrics", split)
 
@@ -341,11 +445,22 @@ def main(args):
         sys.exit(f"CHECK FAILED: files changed during the run: {[k for k in hashes if hashes[k] != after[k]]}")
     (RESULTS / "run_info.json").write_text(json.dumps({
         "split": split, "n_images": len(y), "classes": classes, "device": "cpu",
+        "format": FORMAT,
+        "format_details": {
+            "fp32": "weights in torchvision.models.quantization.resnet18 (quantize=False), fuse_model(), "
+                    "torch.jit.trace",
+            "weight_only_per_channel": "dequantized to FP32, then as fp32",
+            "weight_only_per_tensor": "dequantized to FP32, then as fp32",
+            "static_ptq": "saved fused INT8 TorchScript (torch.jit.script), loaded as is"},
+        "fused_vs_unfused_check": fused_check.to_dict(orient="records"),
         "cpu": subprocess.run("lscpu | grep 'Model name'", shell=True, capture_output=True,
                               text=True).stdout.split(":")[-1].strip(),
-        "logical_cpus": os.cpu_count(), "threads": list(THREADS), "threads_main": 1, "repeats": args.repeats,
-        "warmup_runs": WARMUP, "latency_runs": LATENCY_RUNS, "throughput_batch_size": BATCH_SIZE,
+        "logical_cpus": os.cpu_count(), "threads": list(THREADS), "threads_main": 1, "interop_threads": 1,
+        "repeats": args.repeats, "warmup_runs": WARMUP, "latency_runs": LATENCY_RUNS,
+        "throughput_batch_size": BATCH_SIZE, "peak_memory": "psutil RSS, sampled every 1 ms during load + warm-up",
+        "energy_threads": ENERGY_THREADS, "energy_min_seconds": ENERGY_MIN_SECONDS,
         "bootstrap_resamples": BOOTSTRAP, "bootstrap_seed": BOOTSTRAP_SEED, "quantized_engine": ENGINE,
+        "flops_counted_on": "fused FP32 architecture, for every model",
         "torch": torch.__version__, "python": platform.python_version(), "country_for_co2e": args.country,
         "date_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "sha256": hashes,
@@ -380,9 +495,8 @@ def write_comparison(split):
 
     env = pd.concat([pd.read_csv(RESULTS / m / "environment" / f"metrics_{split}.csv") for m in MODELS])
     base = env.set_index("model").loc["fp32"]
-    for t in THREADS:
-        for metric in ("energy_wh_per_1000", "co2e_g_per_1000"):
-            env[f"{metric}_change_vs_fp32_pct_{t}t"] = (env[f"{metric}_{t}t"] / base[f"{metric}_{t}t"] - 1) * 100
+    for metric in ("energy_wh_per_1000", "co2e_g_per_1000"):
+        env[f"{metric}_change_vs_fp32_pct"] = (env[metric] / base[metric] - 1) * 100
     save_csv(env, out / "environment", "table", split)
 
 
@@ -391,7 +505,9 @@ if __name__ == "__main__":
     parser.add_argument("--split", choices=["validation", "test"], default="validation")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--country", default="TUN", help="ISO-3 country of the machine, for CO2e only")
-    parser.add_argument("--worker")
+    parser.add_argument("--check-only", action="store_true", help="only run the fused vs unfused check")
+    parser.add_argument("--worker", action="store_true")
+    parser.add_argument("--model-path")
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--workdir")
     parser.add_argument("--out")

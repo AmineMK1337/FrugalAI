@@ -27,7 +27,8 @@ STYLE = {  # the same look for a model in every plot
     "static_ptq": dict(label="Static INT8 PTQ", short="Static\nINT8 PTQ", color="#eda100", hatch="xxx"),
 }
 MODELS = list(STYLE)
-THREADS = (1, 2, 4, 8)
+THREADS = (1, 4)
+FORMAT = "fused + TorchScript"
 PERFORMANCE = {"accuracy": "Accuracy", "precision_macro": "Precision", "recall_macro": "Recall",
                "specificity_macro": "Specificity", "f1_macro": "F1-score", "auc_macro": "AUC (x100)"}
 ESTIMATE_NOTE = "CodeCarbon estimate: no power counter on this VM, so it is roughly an assumed CPU power x run time."
@@ -126,7 +127,7 @@ def model_plots(model, split):
     ax.set_ylim(0, 108)
     ax.set_ylabel("Score (%), macro average except accuracy")
     ax.grid(axis="x", visible=False)
-    ax.set_title(f"{label}: performance ({split})", loc="left")
+    ax.set_title(f"{label}: performance ({FORMAT}, {split})", loc="left")
     ax.text(0, -0.14, "Error bars: 95% bootstrap CI (1,000 resamples).", transform=ax.transAxes, fontsize=8,
             color=NOTE)
     save(fig, RESULTS / model / "performance", "overall_metrics", split)
@@ -138,11 +139,11 @@ def model_plots(model, split):
         thread_labels())
     ax.set_ylabel("Latency per image, batch 1 (ms)")
     ax.set_title(f"{label}: latency ({split} image; number = median, ms)", loc="left")
-    ax.text(0, -0.14, "Each box: 900 timed runs (3 repeats x 300).", transform=ax.transAxes, fontsize=8, color=NOTE)
+    ax.text(0, -0.14, f"Each box: 600 timed runs (3 repeats x 200). Format: {FORMAT}.", transform=ax.transAxes, fontsize=8, color=NOTE)
     save(fig, folder, "latency_distribution", split)
 
     row = read(model, "efficiency", "metrics", split).iloc[0]
-    fig, axes = plt.subplots(1, 4, figsize=(15, 4.2), gridspec_kw={"width_ratios": [0.6, 0.6, 1.4, 1.4]})
+    fig, axes = plt.subplots(1, 4, figsize=(13, 4.2), gridspec_kw={"width_ratios": [0.6, 0.6, 1.4, 1.4]})
     for ax, (title, value, fmt) in zip(axes[:2], [("Size (MB)", row["size_mb"], "{:.1f}"),
                                                   ("FLOPs (G)", row["gflops"], "{:.2f}")]):
         bars = ax.bar([0], [value], 0.5, **bar_style(model))
@@ -154,19 +155,24 @@ def model_plots(model, split):
     thread_bars(axes[2], model, [row[f"throughput_img_s_{t}t"] for t in THREADS], "{:.1f}")
     axes[2].set_title("Throughput, batch 32 (images/s)", loc="left", fontsize=10)
     thread_bars(axes[3], model, [row[f"peak_memory_mb_{t}t"] for t in THREADS], "{:.0f}")
-    axes[3].set_title("Peak memory (MB)", loc="left", fontsize=10)
-    fig.suptitle(f"{label}: efficiency ({split})", x=0.01, ha="left", fontweight="semibold")
+    axes[3].set_title("Peak RAM (MB)", loc="left", fontsize=10)
+    fig.suptitle(f"{label}: efficiency ({FORMAT}, {split})", x=0.01, ha="left", fontweight="semibold")
     fig.tight_layout()
     save(fig, folder, "efficiency_summary", split)
 
     row = read(model, "environment", "metrics", split).iloc[0]
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
-    thread_bars(axes[0], model, [row[f"energy_wh_per_1000_{t}t"] for t in THREADS], "{:.2f}")
-    axes[0].set_title("Energy per 1,000 images (Wh)", loc="left", fontsize=10)
-    thread_bars(axes[1], model, [row[f"co2e_g_per_1000_{t}t"] for t in THREADS], "{:.2f}")
-    axes[1].set_title("CO2e per 1,000 images (g)", loc="left", fontsize=10)
-    fig.suptitle(f"{label}: energy and CO2e (estimate, {split})", x=0.01, ha="left", fontweight="semibold")
-    fig.text(0.01, -0.03, f"{ESTIMATE_NOTE} Grid {row['grid_g_per_kwh']:.0f} gCO2e/kWh ({row['country']}).",
+    fig, axes = plt.subplots(1, 2, figsize=(8, 4.2))
+    for ax, (title, value) in zip(axes, [("Energy per 1,000 images (Wh)", row["energy_wh_per_1000"]),
+                                         ("CO2e per 1,000 images (g)", row["co2e_g_per_1000"])]):
+        bars = ax.bar([0], [value], 0.5, **bar_style(model))
+        ax.bar_label(bars, labels=[f"{value:.3f}"], padding=2, fontsize=8.5, color=INK)
+        ax.set_xticks([])
+        ax.set_xlim(-0.6, 0.6)
+        ax.margins(y=0.15)
+        ax.set_title(title, loc="left", fontsize=10)
+    fig.suptitle(f"{label}: energy and CO2e (estimate, 1 thread, {split})", x=0.01, ha="left",
+                 fontweight="semibold")
+    fig.text(0.01, -0.06, f"{ESTIMATE_NOTE}\nAt least 60 s per run. Grid {row['grid_g_per_kwh']:.0f} gCO2e/kWh ({row['country']}).",
              fontsize=8, color=NOTE)
     fig.tight_layout()
     save(fig, RESULTS / model / "environment", "energy_co2e", split)
@@ -192,7 +198,7 @@ def comparison(split):
     ax.set_ylim(0, 118)
     ax.set_ylabel("Score (%), macro average except accuracy")
     ax.grid(axis="x", visible=False)
-    ax.set_title(f"Performance, all models ({split})", loc="left", pad=28)
+    ax.set_title(f"Performance, all models ({FORMAT}, {split})", loc="left", pad=28)
     ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=4, fontsize=9)
     ax.text(0, -0.12, "Error bars: 95% bootstrap CI (1,000 resamples). Static INT8 PTQ is the saved seed-42 model.",
             transform=ax.transAxes, fontsize=8, color=NOTE)
@@ -211,25 +217,22 @@ def comparison(split):
         save(fig, out / "efficiency", name, split)
 
     samples = pd.concat([read(m, "efficiency", "latency_samples", split) for m in MODELS])
-    fig, axes = plt.subplots(1, len(THREADS), figsize=(18, 4.6))
+    fig, axes = plt.subplots(1, len(THREADS), figsize=(12, 4.6))
     for ax, threads, title in zip(axes, THREADS, thread_labels()):
         box(ax, [samples.loc[(samples["model"] == m) & (samples["threads"] == threads), "latency_ms"] for m in MODELS],
             MODELS, [STYLE[m]["short"] for m in MODELS])
         ax.set_title(title, loc="left", fontsize=10)
     axes[0].set_ylabel("Latency per image, batch 1 (ms)")
-    fig.suptitle(f"Latency, all models ({split} image; number = median, ms)", x=0.01, ha="left", fontweight="semibold")
+    fig.suptitle(f"Latency, all models ({FORMAT}, {split} image; number = median, ms)", x=0.01, ha="left", fontweight="semibold")
     fig.tight_layout()
     save(fig, out / "efficiency", "latency", split)
 
     for folder, table, name, prefix, ylabel, title, fmt, note in [
             ("efficiency", eff, "throughput", "throughput_img_s", "Throughput, batch 32 (images/s)", "Throughput",
              "{:.1f}", None),
-            ("efficiency", eff, "memory", "peak_memory_mb", "Peak memory (MB)", "Peak memory (load + batch-1 inference)",
+            ("efficiency", eff, "memory", "peak_memory_mb", "Peak RAM (MB)", "Peak RAM (psutil; load + batch-1 warm-up)",
              "{:.0f}", None),
-            ("environment", env, "energy_per_1000", "energy_wh_per_1000", "Energy per 1,000 images (Wh)",
-             "Energy per 1,000 images (estimate)", "{:.2f}", ESTIMATE_NOTE),
-            ("environment", env, "co2e_per_1000", "co2e_g_per_1000", "CO2e per 1,000 images (g)",
-             "CO2e per 1,000 images (estimate)", "{:.2f}", ESTIMATE_NOTE)]:
+]:
         fig, ax = plt.subplots(figsize=(11, 4.8))
         grouped_by_thread(ax, table, prefix, fmt)
         ax.set_ylabel(ylabel)
@@ -237,6 +240,17 @@ def comparison(split):
         if note:
             ax.text(0, -0.13, note, transform=ax.transAxes, fontsize=8, color=NOTE)
         save(fig, out / folder, name, split)
+
+    for name, column, ylabel, title in [
+            ("energy_per_1000", "energy_wh_per_1000", "Energy per 1,000 images (Wh)", "Energy per 1,000 images"),
+            ("co2e_per_1000", "co2e_g_per_1000", "CO2e per 1,000 images (g)", "CO2e per 1,000 images")]:
+        fig, ax = plt.subplots(figsize=(7.5, 4.4))
+        model_bars(ax, env[column], "{:.3f}")
+        ax.set_ylabel(ylabel)
+        ax.set_title(f"{title} (estimate, 1 thread, {FORMAT})", loc="left")
+        ax.text(0, -0.24, ESTIMATE_NOTE + "\nAt least 60 s per run; median of 3 repeats.", transform=ax.transAxes,
+                fontsize=8, color=NOTE)
+        save(fig, out / "environment", name, split)
 
 
 def main(split="validation"):

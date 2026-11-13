@@ -11,26 +11,59 @@
     "vasc"
   ],
   "device": "cpu",
+  "format": "fused + TorchScript",
+  "format_details": {
+    "fp32": "weights in torchvision.models.quantization.resnet18 (quantize=False), fuse_model(), torch.jit.trace",
+    "weight_only_per_channel": "dequantized to FP32, then as fp32",
+    "weight_only_per_tensor": "dequantized to FP32, then as fp32",
+    "static_ptq": "saved fused INT8 TorchScript (torch.jit.script), loaded as is"
+  },
+  "fused_vs_unfused_check": [
+    {
+      "model": "fp32",
+      "n_images": 1532,
+      "identical_predictions_pct": 100.0,
+      "max_abs_logit_difference": 2.47955322265625e-05,
+      "max_abs_probability_difference": 5.245208740234375e-06
+    },
+    {
+      "model": "weight_only_per_channel",
+      "n_images": 1532,
+      "identical_predictions_pct": 100.0,
+      "max_abs_logit_difference": 2.6702880859375e-05,
+      "max_abs_probability_difference": 3.0994415283203125e-06
+    },
+    {
+      "model": "weight_only_per_tensor",
+      "n_images": 1532,
+      "identical_predictions_pct": 100.0,
+      "max_abs_logit_difference": 1.6629695892333984e-05,
+      "max_abs_probability_difference": 2.9802322387695312e-06
+    }
+  ],
   "cpu": "Intel(R) Xeon(R) Gold 6348 CPU @ 2.60GHz",
   "logical_cpus": 32,
   "threads": [
     1,
-    2,
-    4,
-    8
+    4
   ],
   "threads_main": 1,
+  "interop_threads": 1,
   "repeats": 3,
-  "warmup_runs": 20,
-  "latency_runs": 300,
+  "warmup_runs": 30,
+  "latency_runs": 200,
   "throughput_batch_size": 32,
+  "peak_memory": "psutil RSS, sampled every 1 ms during load + warm-up",
+  "energy_threads": 1,
+  "energy_min_seconds": 60,
   "bootstrap_resamples": 1000,
   "bootstrap_seed": 0,
   "quantized_engine": "x86",
+  "flops_counted_on": "fused FP32 architecture, for every model",
   "torch": "2.12.0+cu126",
   "python": "3.11.6",
   "country_for_co2e": "TUN",
-  "date_utc": "2026-11-13T16:36:36+00:00",
+  "date_utc": "2026-11-13T20:04:46+00:00",
   "sha256": {
     "fp32": "1233528ddb3f0ebab9eeae6dae36acbc98292cc9aa34dadb7e553d5852077927",
     "weight_only_per_channel": "ccc121339016ec14765c77bc5236235502ce826118a1bbe7e74d0dcc85cb0816",
