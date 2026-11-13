@@ -1,0 +1,42 @@
+{
+  "split": "validation",
+  "n_images": 1532,
+  "classes": [
+    "akiec",
+    "bcc",
+    "bkl",
+    "df",
+    "mel",
+    "nv",
+    "vasc"
+  ],
+  "device": "cpu",
+  "cpu": "Intel(R) Xeon(R) Gold 6348 CPU @ 2.60GHz",
+  "logical_cpus": 32,
+  "threads": [
+    1,
+    2,
+    4,
+    8
+  ],
+  "threads_main": 1,
+  "repeats": 3,
+  "warmup_runs": 20,
+  "latency_runs": 300,
+  "throughput_batch_size": 32,
+  "bootstrap_resamples": 1000,
+  "bootstrap_seed": 0,
+  "quantized_engine": "x86",
+  "torch": "2.12.0+cu126",
+  "python": "3.11.6",
+  "country_for_co2e": "TUN",
+  "date_utc": "2026-11-13T16:36:36+00:00",
+  "sha256": {
+    "fp32": "1233528ddb3f0ebab9eeae6dae36acbc98292cc9aa34dadb7e553d5852077927",
+    "weight_only_per_channel": "ccc121339016ec14765c77bc5236235502ce826118a1bbe7e74d0dcc85cb0816",
+    "weight_only_per_tensor": "376a5aa4575fbd3c786722597909e2afc830c4aab97ee977bcc0ec643d12bbfb",
+    "static_ptq": "c39e9d50643b3ade45ee173df8c758fbf03dcddbe690f9a8ea3746872eeeb3bb",
+    "split_csv": "d7b17a1900f233db66a2e76d66eea333863404c53ea4fa2c154dbecd6cfe4f82",
+    "config": "da7f6b852cd0d4a6d7715ee26a768c614f7cab1b14af562546360a9f4409f73e"
+  }
+}

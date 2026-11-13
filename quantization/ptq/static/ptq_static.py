@@ -11,7 +11,8 @@ the INT8 file, so the speedup reflects INT8 only.
 
 Writes: resnet18_static_int8.pt (TorchScript, seed 42) next to this script, and in results/:
 calibration_images.csv, validation_results.csv (one row per model/seed), validation_summary.csv
-(FP32 vs INT8 mean/min/max), confusion_matrix_<model>.csv, comparison.png/.pdf.
+(FP32 vs INT8 mean/min/max), confusion_matrix_<model>.csv.
+Plots of these metrics are made by evaluation/ (evaluate.py, plot_results.py), not here.
 
 Usage: python quantization/ptq/static/ptq_static.py
 """
@@ -28,9 +29,6 @@ PROJECT = HERE.parents[2] / "resnet18_finetunning"
 os.chdir(PROJECT)  # config and split paths are relative to the fine-tuning project
 sys.path.insert(0, str(PROJECT / "src"))
 
-import matplotlib  # noqa: E402
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import torch  # noqa: E402
@@ -158,56 +156,6 @@ SCORES = ["accuracy", "precision_macro", "recall_macro", "f1_macro", "specificit
           "melanoma_recall"]
 
 
-def plot(summary):
-    """FP32 vs INT8. Scores: INT8 bar = mean of the calibration samples, whiskers = min-max.
-    Size and latency: the saved (seed-42) INT8 model."""
-    surface, ink, muted, grid = "#fcfcfb", "#1f1e1c", "#52514e", "#e6e5e0"
-    fp32_colour, int8_colour = "#2a78d6", "#eda100"
-    plt.rcParams.update({
-        "font.family": "DejaVu Sans", "font.size": 10, "axes.labelcolor": muted, "axes.edgecolor": grid,
-        "axes.facecolor": surface, "figure.facecolor": surface, "savefig.facecolor": surface,
-        "xtick.color": muted, "ytick.color": muted, "xtick.major.size": 0, "ytick.major.size": 0,
-        "axes.spines.top": False, "axes.spines.right": False, "axes.spines.left": False, "axes.grid": True,
-        "grid.color": grid, "axes.axisbelow": True, "pdf.fonttype": 42, "legend.frameon": False,
-        "axes.titlesize": 11, "axes.titleweight": "semibold",
-    })
-    s = summary.set_index("model")
-    panels = [("File size (MB)", ["size_mb"], ["Size"], 1, "INT8_saved_seed42"),
-              ("Latency (ms)", ["latency_median_ms"], ["Median, batch 1,\n4 CPU threads"], 1, "INT8_saved_seed42"),
-              ("Validation scores (%)", ["accuracy", "recall_macro", "f1_macro", "auc_macro", "melanoma_recall"],
-               ["Accuracy", "Macro\nrecall", "Macro F1", "Macro\nAUC", "Melanoma\nrecall"], 100, "INT8_mean")]
-    fig, axes = plt.subplots(1, 3, figsize=(13, 4.4), gridspec_kw={"width_ratios": [1, 1, 3.2]})
-    for ax, (title, columns, ticks, factor, int8_row) in zip(axes, panels):
-        x, width = np.arange(len(columns)), 0.38
-        fp32 = s.loc["FP32", columns].to_numpy(dtype=float) * factor
-        int8 = s.loc[int8_row, columns].to_numpy(dtype=float) * factor
-        bars = ax.bar(x - width / 2, fp32, width * 0.92, color=fp32_colour, label="FP32 (original)")
-        ax.bar_label(bars, fmt="%.1f", padding=2, fontsize=8, color=ink)
-        if int8_row == "INT8_mean":
-            low = s.loc["INT8_min", columns].to_numpy(dtype=float) * factor
-            high = s.loc["INT8_max", columns].to_numpy(dtype=float) * factor
-            bars = ax.bar(x + width / 2, int8, width * 0.92, color=int8_colour,
-                          yerr=[int8 - low, high - int8], error_kw={"ecolor": ink, "elinewidth": 1, "capsize": 3},
-                          label=f"INT8 static PTQ (scores: mean of {len(SEEDS)} calibration samples, "
-                                "whiskers min-max; size and latency: saved model)")
-            ax.bar_label(bars, labels=[f"{v:.1f}" for v in int8], padding=6, fontsize=8, color=ink)
-        else:
-            bars = ax.bar(x + width / 2, int8, width * 0.92, color=int8_colour)
-            ax.bar_label(bars, fmt="%.1f", padding=2, fontsize=8, color=ink)
-        ax.set_xticks(x, ticks)
-        ax.set_title(title, loc="left")
-        ax.grid(axis="x", visible=False)
-        ax.margins(y=0.12)
-    axes[2].set_ylim(0, 100)
-    handles = axes[0].get_legend_handles_labels()[0] + axes[2].get_legend_handles_labels()[0][1:]
-    names = axes[0].get_legend_handles_labels()[1] + axes[2].get_legend_handles_labels()[1][1:]
-    fig.legend(handles, names, loc="upper left", ncol=2, bbox_to_anchor=(0.005, 1.04))
-    fig.tight_layout(rect=(0, 0, 1, 0.94))
-    fig.savefig(OUT / "comparison.png", dpi=300, bbox_inches="tight")
-    fig.savefig(OUT / "comparison.pdf", bbox_inches="tight")
-    plt.close(fig)
-
-
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     config = load_config(CONFIG)
@@ -272,7 +220,6 @@ def main():
             columns + ["size_mb", "latency_median_ms"]].to_dict()},
     ])
     summary.to_csv(OUT / "validation_summary.csv", index=False)
-    plot(summary)
 
     if (sha256(CHECKPOINT), sha256(config.splits_csv)) != hashes:
         raise CheckFailed("the FP32 checkpoint or the split file changed during the run")

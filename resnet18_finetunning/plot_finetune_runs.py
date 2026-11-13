@@ -1,7 +1,7 @@
-"""Accuracy, loss and summary plots for the two fine-tuned ResNet-18 runs.
+"""Training curves (accuracy, loss, learning rate) for the two fine-tuned ResNet-18 runs.
 
-Reads the metrics saved during training; nothing is re-run. final_metrics.json is
-scored on the validation split. Writes PNG (300 dpi) and PDF to results/plots/.
+Reads the metrics saved during training; nothing is re-run. Writes PNG (300 dpi) and PDF to
+results/plots/. Final evaluation metrics are plotted under evaluation/, not here.
 
 Usage: python plot_finetune_runs.py
 """
@@ -11,7 +11,6 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "results"
@@ -22,8 +21,6 @@ RUNS = {  # the colour follows the model in every figure
 }
 SURFACE, MUTED, GRID = "#fcfcfb", "#52514e", "#e6e5e0"
 TRAIN_STYLE = (0, (4, 3))
-METRICS = {"accuracy": "Accuracy", "macro_precision": "Macro\nprecision", "macro_recall": "Macro\nrecall",
-           "macro_f1": "Macro F1", "weighted_f1": "Weighted F1"}
 
 plt.rcParams.update({
     "font.family": "DejaVu Sans", "font.size": 10, "axes.labelcolor": MUTED, "axes.edgecolor": GRID,
@@ -105,22 +102,6 @@ def learning_rate(runs):
     save(fig, "learning_rate")
 
 
-def final_metrics(runs):
-    fig, ax = plt.subplots(figsize=(8.5, 4.4))
-    x = np.arange(len(METRICS))
-    width = 0.34
-    for offset, run in zip((-1, 1), runs.values()):
-        ax.bar(x + offset * (width / 2 + 0.01), [run["final"][m] for m in METRICS], width, color=run["colour"],
-               label=run["short"])
-    ax.set_xticks(x, METRICS.values())
-    ax.set_ylim(0, 1)
-    ax.set_ylabel("Score on the validation split")
-    ax.grid(axis="x", visible=False)
-    ax.set_title("Best checkpoint: validation metrics", loc="left")
-    ax.legend(ncol=2, loc="upper left")
-    save(fig, "final_metrics")
-
-
 if __name__ == "__main__":
     data = load()
     for run_key, run_data in data.items():
@@ -128,5 +109,4 @@ if __name__ == "__main__":
     comparison(data, "val_acc", "Validation accuracy (%)", "Validation accuracy per epoch", "compare_val_accuracy")
     comparison(data, "val_loss", "Class-weighted cross-entropy", "Validation loss per epoch", "compare_val_loss")
     learning_rate(data)
-    final_metrics(data)
     print(f"Wrote figures to {OUT}")
