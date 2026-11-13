@@ -1,6 +1,6 @@
 # FrugalAI
 
-Skin-lesion classification on HAM 10000 with a fine-tuned ResNet-18. This page summarizes the work so far. Quantization and efficiency benchmarking will be redone later.
+Skin-lesion classification on HAM 10000 with a fine-tuned ResNet-18. This page summarizes the work so far: the data split, fine-tuning, and the evaluation of the FP32 model against its INT8 versions (weight-only quantization in [quantization/ptq/weight_only/](quantization/ptq/weight_only/), static post-training quantization in [quantization/ptq/static/](quantization/ptq/static/)). Quantization-aware training (QAT) is not done yet.
 
 ## 1. Dataset
 
@@ -61,11 +61,55 @@ Each run's folder in [resnet18_finetunning/results/](resnet18_finetunning/result
 - Grad-CAM maps for 5 correct and 5 incorrect predictions
 - the exact config and software environment
 
+## 5. Evaluation machine and thread protocol
+
+All models (FP32, weight-only INT8, static INT8 PTQ) are evaluated by [evaluation/evaluate.py](evaluation/evaluate.py) on the same validation images, on the same machine, on the CPU only. The exact settings and file hashes of each run are saved in [evaluation/results/run_info.json](evaluation/results/run_info.json).
+
+### The virtual machine
+
+| Component | Value |
+|---|---|
+| Type | KVM virtual machine |
+| CPU | Intel Xeon Gold 6348 @ 2.60 GHz, 32 vCPUs (1 thread per vCPU), AVX-512 with VNNI (INT8 instructions) |
+| Memory | 62 GB |
+| GPU | NVIDIA A40-24Q (virtual GPU): used for fine-tuning only, not for evaluation |
+| OS | Ubuntu 23.10, Linux kernel 6.5 |
+| Software | Python 3.11.6, PyTorch 2.12.0, quantized backend `x86` |
+
+The VM exposes no power counter: there is no RAPL for the CPU, and the virtual GPU does not report power. Energy and CO₂e are therefore estimated by CodeCarbon, not measured (see below).
+
+### Measuring at 1, 2, 4 and 8 threads
+
+The thread count is the number of CPU cores PyTorch uses for one inference (`torch.set_num_threads`). Latency, throughput, peak memory, energy and CO₂e depend on it, so each is measured at 1, 2, 4 and 8 threads. Accuracy and the other performance metrics, file size and FLOPs do not depend on it, so they are computed once.
+
+- **Main protocol: 1 thread.** It is the most stable and reproducible setting, close to a small device. The 2, 4 and 8-thread results show how each model scales on a multi-core CPU.
+- **One fresh process per measurement.** Each combination of model and thread count runs in a new Python process, so no cache or memory is carried over between runs. Inter-op parallelism is fixed at 1 thread.
+- **3 repeats, interleaved.** The runs go repeat → thread count → model, all back to back in one session. A slowdown of the machine at one moment therefore affects every model, not just one. The reported value is the median of the 3 repeats.
+- **Same inputs.** The validation images are decoded once and saved, and every run reads the same tensors.
+
+In each run:
+
+| Metric | How it is measured |
+|---|---|
+| Latency | One image (batch 1): 20 warm-up runs, then 300 timed runs. Median and 95th percentile, in ms. |
+| Peak memory | Increase in the process's peak memory while loading the model and running batch-1 inference, in MB. |
+| Throughput | All 1,532 validation images in batches of 32, in images per second. |
+| Energy and CO₂e | CodeCarbon (offline, process mode) during the throughput pass, scaled to 1,000 images. CO₂e uses Tunisia's grid intensity, 564 gCO₂e/kWh. |
+
+**Limit of the energy estimate:** without a power counter, CodeCarbon assumes about 250 W per thread in use. Energy is therefore roughly that power × run time, and it grows with the thread count (about 1,770 W at 8 threads, more than this CPU can draw). Only compare energy and CO₂e between models at the same thread count.
+
+To rerun the evaluation (validation split; about 40 minutes):
+
+```
+python evaluation/evaluate.py
+```
+
+Results and plots are written to [evaluation/results/](evaluation/results/), by model (`fp32`, `weight_only_per_channel`, `weight_only_per_tensor`, `static_ptq`) and metric type (`performance`, `efficiency`, `environment`), with cross-model comparisons in `comparison/`.
+
 ## Next steps
 
-- Evaluate both models on the held-out test set.
-- Redo INT8 quantization (post-training and quantization-aware) on top of the best model.
-- Benchmark size, latency, memory and energy.
+- Quantization-aware training (QAT) of the best model (strong_cosine25), then add it to the evaluation in the same way as the other models.
+- Once every model is final, evaluate all of them once on the held-out test set (`python evaluation/evaluate.py --split test`).
 
 ## Reproduce
 
