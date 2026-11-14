@@ -1,2 +1,2 @@
 model,format,size_mb,gflops,latency_median_ms_1t,latency_p95_ms_1t,throughput_img_s_1t,peak_memory_mb_1t,latency_median_ms_4t,latency_p95_ms_4t,throughput_img_s_4t,peak_memory_mb_4t,note
-weight_only_per_tensor,fused + TorchScript,11.291719,3.644641294,50.85978494025767,51.60265367012471,20.99408488229652,78.02734375,15.225913957692683,15.515508397947997,73.60006332173984,77.2734375,"INT8 weights on disk, dequantized to FP32 at load: computes in FP32"
+weight_only_per_tensor,fused + TorchScript,11.291719,3.644641294,50.86847709026188,51.47054598201066,21.298924239892923,78.0390625,14.644811977632344,15.026695746928453,77.2003383414755,77.8984375,"INT8 weights on disk, dequantized to FP32 at load: computes in FP32"

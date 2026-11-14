@@ -27,7 +27,6 @@ STYLE = {  # the same look for a model in every plot
                                     color="#eb6834", hatch="///"),
     "weight_only_per_tensor": dict(label="Weight-only INT8 per-tensor", short="Weight-only\nper-tensor",
                                    color="#1baf7a", hatch="\\\\\\"),
-    "static_ptq": dict(label="Static INT8 PTQ", short="Static\nINT8 PTQ", color="#eda100", hatch="xxx"),
     "qat": dict(label="INT8 QAT", short="INT8\nQAT", color="#8b5cc7", hatch="..."),
 }
 MODELS = list(STYLE)
@@ -92,7 +91,7 @@ def grouped_by_thread(ax, table, prefix, fmt):
     ax.set_xticks(x, thread_labels())
     ax.grid(axis="x", visible=False)
     ax.margins(y=0.2)
-    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=3, fontsize=9)
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2, fontsize=9)
 
 
 def fp32_reference(ax, centers, values, half_width=0.42):
@@ -305,9 +304,8 @@ def comparison(split):
     ax.set_ylabel("Score (%), macro average except accuracy")
     ax.grid(axis="x", visible=False)
     ax.set_title(f"Performance, all models ({FORMAT}, {split})", loc="left", pad=46)
-    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=3, fontsize=9)
-    ax.text(0, -0.12, "Error bars: 95% bootstrap CI (1,000 resamples). Dashed line: FP32 level. Static INT8 PTQ and "
-            "INT8 QAT are the saved seed-42 models.",
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2, fontsize=9)
+    ax.text(0, -0.12, "Error bars: 95% bootstrap CI (1,000 resamples). Dashed line: FP32 level.",
             transform=ax.transAxes, fontsize=8, color=NOTE)
     save(fig, out / "performance", "metrics_all_models", split)
 

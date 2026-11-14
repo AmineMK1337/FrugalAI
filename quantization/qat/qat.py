@@ -1,39 +1,28 @@
-"""Quantization-aware training (QAT) of the fine-tuned ResNet-18, v2 (3-phase schedule): INT8 weights and
-activations, same scheme as static PTQ (x86 engine, per-channel symmetric INT8 weights, per-tensor activations with
-reduce_range=True).
+"""Quantization-aware training (QAT) of the fine-tuned ResNet-18: INT8 weights and activations (x86 engine,
+per-channel symmetric INT8 weights, per-tensor activations with reduce_range=True).
 
-Data roles: train split = QAT fine-tuning and observer initialization; validation split = choosing the epoch.
-The test split is never loaded. Nothing in resnet18_finetunning/ or quantization/ptq/ is modified: the FP32
-checkpoint, the split, the PTQ model and PTQ results are hashed before and after the run.
-The previous run (v1: single cosine schedule, selection over epochs 0-10) is kept in _v1_previous/.
+Data roles: train split = QAT fine-tuning and observer initialization; validation split = monitoring each epoch.
+The test split is never loaded. The FP32 checkpoint, the split and the static PTQ files used for the observer
+initialization are hashed before and after the run and must not change.
 
-Per seed (42, 1, 2; 42 is the saved model):
  1. torchvision.models.quantization.resnet18(quantize=False), FP32 weights (strict); train(); fuse_model(is_qat=True);
     qconfig = get_default_qat_qconfig("x86"); prepare_qat.
- 2. Observer initialization on the same 1,000 stratified training images as static PTQ for that seed (eval
-    preprocessing, no gradient, BatchNorm in eval mode, fake quantization off). The x86 QAT qconfig observes
-    activations with a moving-average min/max while static PTQ used a HistogramObserver, so that literal pass alone
-    does not reproduce PTQ (its epoch-0 result is recorded as "epoch0_moving_average_init"); the activation ranges
-    and per-channel weight ranges of the PTQ model calibrated on those images are then written into the QAT
-    observers. Checked: epoch-0 predictions identical to static PTQ, metrics equal to its saved results.
- 3. 10 epochs on the GPU, weights trained in every phase (class-weighted cross-entropy with training-split weights,
-    strong augmentation, batch 32, Adam):
+ 2. Observer initialization on 1,000 stratified training images (seed 42; the same images as the static PTQ
+    calibration). The activation and per-channel weight ranges of a static PTQ calibration on those images are copied
+    into the QAT observers, so before training the INT8 model equals static PTQ (checked).
+ 3. 10 epochs on the GPU, seed 42, weights trained in every phase (class-weighted cross-entropy with training-split
+    weights, strong augmentation, batch 32, Adam):
       epochs 1-2   adaptation:    fake quant on, observers updating, BN updating, lr 1e-5 constant
       epochs 3-7   fine-tuning:   cosine lr decay starting from 1e-5 (8-epoch cosine over epochs 3-10)
       epochs 8-10  stabilization: BN statistics frozen (after epoch 7), observers disabled (scales and zero points
                                   fixed), weights keep training, lr continues the cosine decay toward 0
- 4. Before training and after every epoch: copy to CPU, convert to INT8, evaluate on validation.
-    Selection: the best INT8 validation macro F1 among epochs 8-10 (final quantization parameters). Epoch 10 is also
-    reported without selection.
-FP32 control: the same 10-epoch schedule from the FP32 model without fake quantization (same lr, BN frozen after
-epoch 7), FP32 validation metrics, same selection rule (best of epochs 8-10) and epoch 10.
+ 4. After every epoch: copy to CPU, convert to INT8, evaluate on validation (monitoring only).
+    The saved model is the final one (epoch 10): no epoch is chosen on validation.
 
-Writes, in quantization/qat/: resnet18_qat_int8.pt (TorchScript, seed 42, selected epoch) and in results/:
-settings.json, training_history.json (+ .csv), control_fp32_history.json (+ .csv), validation_results.csv (one row
-per model / seed / selection), validation_summary.csv (mean/min/max over seeds, and QAT - control),
-confusion_matrix_<model>.csv, plots/training_curves.{pdf,png}.
+Writes quantization/qat/resnet18_qat_int8.pt (TorchScript) and, in results/: settings.json, training_history.{json,csv},
+validation_results.csv (FP32 and QAT), confusion_matrix_QAT.csv, plots/training_curves.{pdf,png}.
 
-Usage: python quantization/qat/qat.py [--seeds 42 1 2] [--plot-only]
+Usage: python quantization/qat/qat.py [--plot-only]
 """
 import argparse
 import copy
@@ -82,10 +71,9 @@ CHECKPOINT = PROJECT / "results/strong_cosine25_resnet18/resnet18_baseline.pth"
 QAT_INT8 = HERE / "resnet18_qat_int8.pt"
 OUT = HERE / "results"
 ENGINE = "x86"
-N_CALIBRATION, SAVED_SEED = 1000, 42
+N_CALIBRATION, SEED = 1000, 42
 LR, EPOCHS = 1e-5, 10
 ADAPTATION_END, FINETUNE_END = 2, 7  # epochs 1-2 adaptation, 3-7 fine-tuning, 8-10 stabilization
-SELECT_FROM = FINETUNE_END + 1       # selection among epochs 8-10: quantization parameters final
 EVAL_THREADS = 16
 SCORES = ["accuracy", "balanced_accuracy", "precision_macro", "recall_macro", "f1_macro", "specificity_macro", "auc_macro",
           "melanoma_recall"]
@@ -316,157 +304,99 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
     return total / n
 
 
-def freeze_bn_fp32(model):
-    for m in model.modules():
-        if isinstance(m, torch.nn.BatchNorm2d):
-            m.eval()
-
-
-def start_from_ptq(seed, config, model, val_batches, y, fp32_ref, classes, device, info):
+def start_from_ptq(config, model, val_batches, y, fp32_ref, classes, device, info):
     """Observer initialization (literal pass, then PTQ ranges) and the check that epoch 0 = static PTQ."""
-    calibration = calibration_subset(config, seed)
+    calibration = calibration_subset(config, SEED)
     ptq = static_ptq_prepared(config.num_classes, calibration)
     ptq_logits = predict(convert(copy.deepcopy(ptq), inplace=False).eval(), val_batches)
     init_observers(model, calibration, device)
-    literal = metrics("literal", predict(to_int8(model), val_batches), y, fp32_ref, classes)
-    info["epoch0_moving_average_init"] = {k: literal[k] for k in SCORES + ["identical_to_fp32_pct"]}
-    log(f"seed {seed}: literal moving-average observer init -> INT8 val macro F1 {literal['f1_macro']:.4f}")
     info["activation_observers_copied"] = copy_ptq_activation_ranges(model, ptq)
     info["weight_observers_copied"] = copy_ptq_weight_ranges(model, ptq)
     int8 = to_int8(model)
     check_quantized(int8)
     epoch0_logits = predict(int8, val_batches)
     saved = pd.read_csv(STATIC / "results/validation_results.csv")
-    saved = saved[saved["seed"] == seed].iloc[0]
+    saved = saved[saved["seed"] == SEED].iloc[0]
     e0 = metrics("e0", epoch0_logits, y, fp32_ref, classes)
     info["epoch0_vs_static_ptq"] = {
         "identical_predictions_pct": float((epoch0_logits.argmax(1) == ptq_logits.argmax(1)).float().mean() * 100),
-        "max_abs_logit_difference": float((epoch0_logits - ptq_logits).abs().max()),
-        **{f"{k}_epoch0": e0[k] for k in ("accuracy", "f1_macro", "melanoma_recall")},
-        **{f"{k}_static_ptq_saved": float(saved[k]) for k in ("accuracy", "f1_macro", "melanoma_recall")}}
-    log(f"seed {seed}: epoch 0 vs static PTQ: {info['epoch0_vs_static_ptq']}")
+        "max_abs_logit_difference": float((epoch0_logits - ptq_logits).abs().max())}
+    log(f"epoch 0 vs static PTQ: {info['epoch0_vs_static_ptq']}")
     if not torch.equal(epoch0_logits.argmax(1), ptq_logits.argmax(1)) or not all(
             abs(e0[k] - saved[k]) < 1e-9 for k in ("accuracy", "f1_macro", "melanoma_recall")):
-        raise CheckFailed(f"seed {seed}: epoch 0 does not reproduce static PTQ: {info['epoch0_vs_static_ptq']}")
+        raise CheckFailed(f"epoch 0 does not reproduce static PTQ: {info['epoch0_vs_static_ptq']}")
 
 
-def run(seed, config, val, fp32_ref, classes, device, control=False):
-    """One QAT run (or the FP32 control) for one seed.
-    Returns (history rows, info, selected model, epoch-10 model); the models are CPU copies (QAT only)."""
+def train(config, val, fp32_ref, classes, device):
+    """QAT, seed 42. Returns (history rows, info, final QAT model on the CPU)."""
     y, val_batches = val
-    set_seed(seed)
+    set_seed(SEED)
     train_loader, _, _ = build_dataloaders(config)
     criterion = torch.nn.CrossEntropyLoss(weight=compute_class_weights(train_loader, config.num_classes, device))
-    info = {"seed": seed}
-    if control:
-        model = load_fp32(config.num_classes).to(device)
-        evaluate = lambda: predict(model.eval(), val_batches, device)  # noqa: E731
-    else:
-        model = qat_prepared(config.num_classes).to(device)
-        start_from_ptq(seed, config, model, val_batches, y, fp32_ref, classes, device, info)
-        evaluate = lambda: predict(to_int8(model), val_batches)  # noqa: E731
+    info = {"seed": SEED}
+    model = qat_prepared(config.num_classes).to(device)
+    start_from_ptq(config, model, val_batches, y, fp32_ref, classes, device, info)
 
-    set_seed(seed)  # QAT and control start training from the same RNG state (batch order, augmentation)
+    set_seed(SEED)
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
-    history, selected, final = [], None, None
+    history = []
     for epoch in range(EPOCHS + 1):
         start = time.time()
         bn_frozen, observers_on = epoch > FINETUNE_END, epoch <= FINETUNE_END
-        row = {"seed": seed, "epoch": epoch, "phase": phase(epoch), "lr": None,
-               "bn": "frozen" if bn_frozen else "updating",
-               "observers": "n/a (FP32)" if control else "updating" if observers_on else "disabled",
-               "train_loss": None}
+        row = {"epoch": epoch, "phase": phase(epoch), "lr": None, "bn": "frozen" if bn_frozen else "updating",
+               "observers": "updating" if observers_on else "disabled", "train_loss": None}
         if epoch > 0:
             for group in optimizer.param_groups:
                 group["lr"] = lr_at(epoch)
             row["lr"] = lr_at(epoch)
             model.train()
             if bn_frozen:
-                freeze_bn_fp32(model) if control else model.apply(nniqat.freeze_bn_stats)
-            if not control and not observers_on:
+                model.apply(nniqat.freeze_bn_stats)
+            if not observers_on:
                 model.apply(disable_observer)
             row["train_loss"] = train_one_epoch(model, train_loader, criterion, optimizer, device)
-        m = metrics("x", evaluate(), y, fp32_ref, classes)
+        m = metrics("x", predict(to_int8(model), val_batches), y, fp32_ref, classes)
         row.update({f"val_{k}": m[k] for k in SCORES + ["identical_to_fp32_pct"]})
         row["epoch_seconds"] = time.time() - start
         history.append(row)
-        log(f"{'control' if control else 'QAT'} seed {seed} epoch {epoch} [{row['phase']}, lr {row['lr']}, BN "
-            f"{row['bn']}, observers {row['observers']}]: loss {row['train_loss']}, val {'FP32' if control else 'INT8'} "
-            f"F1 {m['f1_macro']:.4f}, acc {m['accuracy']:.4f}, bal acc {m['balanced_accuracy']:.4f}, mel recall "
-            f"{m['melanoma_recall']:.4f}, identical {m['identical_to_fp32_pct']:.2f}%")
-        if not control and epoch >= SELECT_FROM and (selected is None or m["f1_macro"] > selected[1]):
-            selected = (epoch, m["f1_macro"], copy.deepcopy(model).cpu())
-        if not control and epoch == EPOCHS:
-            final = copy.deepcopy(model).cpu()
-    window = [r for r in history if r["epoch"] >= SELECT_FROM]
-    best = max(window, key=lambda r: r["val_f1_macro"])  # first maximum, as for QAT (strict >)
-    info["selected_epoch"], info["selected_val_f1_macro"] = best["epoch"], best["val_f1_macro"]
-    if not control and selected[0] != best["epoch"]:
-        raise CheckFailed("selection mismatch")
-    return history, info, (None if control else selected[2]), final
+        log(f"epoch {epoch} [{row['phase']}, lr {row['lr']}, BN {row['bn']}, observers {row['observers']}]: "
+            f"loss {row['train_loss']}, val INT8 F1 {m['f1_macro']:.4f}, acc {m['accuracy']:.4f}, bal acc "
+            f"{m['balanced_accuracy']:.4f}, mel recall {m['melanoma_recall']:.4f}, identical "
+            f"{m['identical_to_fp32_pct']:.2f}%")
+    return history, info, copy.deepcopy(model).cpu()
 
 
-# ── Plots ────────────────────────────────────────────────────────────────────
+# ── Plot ─────────────────────────────────────────────────────────────────────
 
-def plot_curves(history, control, ptq_seed_rows, fp32_row):
+def plot_curves(history, fp32_row):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 10, "axes.grid": True, "grid.color": "#e5e5e5",
                          "axes.spines.top": False, "axes.spines.right": False, "legend.frameon": False,
                          "pdf.fonttype": 42})
-    seed_style = {42: dict(marker="o", linestyle="-"), 1: dict(marker="s", linestyle="--"),
-                  2: dict(marker="^", linestyle=":")}
-    metrics_ = [("val_f1_macro", "Validation macro F1 (%)", "f1_macro"),
-                ("val_accuracy", "Validation accuracy (%)", "accuracy")]
-    runs = [("QAT (INT8, converted after each epoch)", history),
-            ("FP32 control (same schedule, no fake quant)", control)]
-    fig, axes = plt.subplots(2, 3, figsize=(16, 8.2), sharey="row")
-    for r, (column, ylabel, ref) in enumerate(metrics_):
-        for c, (title, table) in enumerate(runs):
-            ax = axes[r, c]
-            for seed, rows in table.groupby("seed"):
-                rows = rows.sort_values("epoch")
-                ax.plot(rows["epoch"], rows[column] * 100, color="#8a8a8a", linewidth=1, markersize=4,
-                        markerfacecolor="white", label=f"seed {seed}", **seed_style.get(seed, {}))
-            mean = table.groupby("epoch")[column].mean() * 100
-            ax.plot(mean.index, mean.values, color="#1f1e1c", linewidth=2.6, marker="o", markersize=5,
-                    label=f"mean of {table['seed'].nunique()} seeds")
-            ax.set_title(title if r == 0 else "", loc="left", fontsize=10.5, fontweight="semibold")
-        ax = axes[r, 2]
-        for (title, table), style in zip(runs, (dict(color="#1f1e1c", marker="o", linestyle="-"),
-                                                 dict(color="#1f1e1c", marker="D", linestyle="--",
-                                                      markerfacecolor="white"))):
-            mean = table.groupby("epoch")[column].mean() * 100
-            ax.plot(mean.index, mean.values, linewidth=2.2, markersize=5,
-                    label=("QAT" if "QAT" in title else "FP32 control") + " (mean of seeds)", **style)
-        if r == 0:
-            ax.set_title("QAT vs FP32 control (means)", loc="left", fontsize=10.5, fontweight="semibold")
-        for ax in axes[r]:
-            ax.axhline(fp32_row[ref] * 100, color="#2a78d6", linewidth=1.1, linestyle=(0, (1, 1)), label="FP32 (start)")
-            ax.axhline(ptq_seed_rows[ref].mean() * 100, color="#555555", linewidth=1.1, linestyle=(0, (6, 3)),
-                       label="Static PTQ (mean of 3 seeds)")
-            for lo, hi, shade, name in ((0.5, ADAPTATION_END + 0.5, "#f2f2f2", "adaptation"),
-                                        (ADAPTATION_END + 0.5, FINETUNE_END + 0.5, "#ffffff", "fine-tuning"),
-                                        (FINETUNE_END + 0.5, EPOCHS + 0.5, "#dcdcdc", "stabilization\n(selection)")):
-                ax.axvspan(lo, hi, color=shade, zorder=0)
-                ax.axvline(lo, color="#9a9a9a", linewidth=0.7, linestyle="--", zorder=0.5)
-                if r == 0:
-                    ax.text((lo + hi) / 2, 1.0, name, transform=ax.get_xaxis_transform(), ha="center", va="top",
-                            fontsize=7.5, color="#444444")
-            ax.set_xticks(range(0, EPOCHS + 1))
-            ax.set_xlim(-0.4, EPOCHS + 0.5)
-            if r == 1:
-                ax.set_xlabel("Epoch (0 = start: static PTQ for QAT, FP32 for the control)")
-        axes[r, 0].set_ylabel(ylabel)
-    for c in range(3):
-        handles, labels = axes[0, c].get_legend_handles_labels()
-        axes[1, c].legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=2, fontsize=8)
-    fig.suptitle("QAT v2 (3-phase schedule) vs FP32 control, validation split", x=0.01, ha="left",
+    panels = [("val_f1_macro", "Macro F1 (%)", "f1_macro"), ("val_accuracy", "Accuracy (%)", "accuracy"),
+              ("val_melanoma_recall", "Melanoma recall (%)", "melanoma_recall")]
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.4))
+    for ax, (column, ylabel, ref) in zip(axes, panels):
+        ax.plot(history["epoch"], history[column] * 100, color="#8b5cc7", linewidth=2.2, marker="o", markersize=5,
+                label="INT8 QAT (converted after each epoch)")
+        ax.axhline(fp32_row[ref] * 100, color="#2a78d6", linewidth=1.3, linestyle="--", label="FP32 baseline")
+        for lo, hi, shade, name in ((0.5, ADAPTATION_END + 0.5, "#f2f2f2", "adaptation"),
+                                    (ADAPTATION_END + 0.5, FINETUNE_END + 0.5, "#ffffff", "fine-tuning"),
+                                    (FINETUNE_END + 0.5, EPOCHS + 0.5, "#dcdcdc", "stabilization")):
+            ax.axvspan(lo, hi, color=shade, zorder=0)
+            ax.axvline(lo, color="#9a9a9a", linewidth=0.7, linestyle="--", zorder=0.5)
+            ax.text((lo + hi) / 2, 1.0, name, transform=ax.get_xaxis_transform(), ha="center", va="top",
+                    fontsize=7.5, color="#444444")
+        ax.set_xticks(range(0, EPOCHS + 1))
+        ax.set_xlim(-0.4, EPOCHS + 0.5)
+        ax.set_xlabel("Epoch (0 = before training)")
+        ax.set_ylabel(ylabel)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.0), ncol=2, fontsize=9)
+    fig.suptitle("QAT training curves, validation split (seed 42; saved model = epoch 10)", x=0.01, ha="left",
                  fontweight="semibold")
-    fig.text(0.01, -0.06, "Phases: 1-2 adaptation (lr 1e-5 constant), 3-7 fine-tuning (cosine decay), 8-10 "
-             "stabilization (BN frozen, observers off; selection window). Weights train in every phase.",
-             fontsize=8, color="#555555")
     fig.tight_layout()
     (OUT / "plots").mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT / "plots" / "training_curves.png", dpi=300, bbox_inches="tight")
@@ -476,42 +406,13 @@ def plot_curves(history, control, ptq_seed_rows, fp32_row):
 
 def plot_from_saved():
     """Training curves from the saved CSVs (nothing is re-run)."""
-    ptq = pd.read_csv(STATIC / "results/validation_results.csv")
-    plot_curves(pd.read_csv(OUT / "training_history.csv"), pd.read_csv(OUT / "control_fp32_history.csv"),
-                ptq[ptq["model"] != "FP32"], ptq[ptq["model"] == "FP32"].iloc[0])
+    table = pd.read_csv(OUT / "validation_results.csv")
+    plot_curves(pd.read_csv(OUT / "training_history.csv"), table[table["model"] == "FP32"].iloc[0])
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
-GROUPS = {"QAT_seed": "QAT, selected (best of epochs 8-10)", "QAT_epoch10_seed": "QAT, epoch 10",
-          "control_selected_seed": "FP32 control, selected (best of epochs 8-10)",
-          "control_epoch10_seed": "FP32 control, epoch 10"}
-
-
-def summarize(table):
-    """mean/min/max over seeds per group, and QAT - control (per seed, then mean/min/max of the differences)."""
-    cols = SCORES + ["identical_to_fp32_pct"]
-    out = [{"model": "FP32", **table[table["model"] == "FP32"].iloc[0][cols].to_dict()}]
-    for prefix, description in GROUPS.items():
-        rows = table[table["model"].str.fullmatch(prefix + r"\d+")]
-        for stat in ("mean", "min", "max"):
-            out.append({"model": f"{prefix}_{stat}", "description": description,
-                        **getattr(rows[cols], stat)().to_dict()})
-    for qat, ctl, what in (("QAT_seed", "control_selected_seed", "selected"),
-                           ("QAT_epoch10_seed", "control_epoch10_seed", "epoch10")):
-        q = table[table["model"].str.fullmatch(qat + r"\d+")].set_index("seed")[cols]
-        c = table[table["model"].str.fullmatch(ctl + r"\d+")].set_index("seed")[cols]
-        diff = (q - c.loc[q.index]).astype(float)
-        for seed in diff.index:
-            out.append({"model": f"QAT_minus_control_{what}_seed{int(seed)}",
-                        "description": f"QAT - FP32 control ({what}), same seed", **diff.loc[seed].to_dict()})
-        for stat in ("mean", "min", "max"):
-            out.append({"model": f"QAT_minus_control_{what}_{stat}", "description": f"QAT - FP32 control ({what})",
-                        **getattr(diff, stat)().to_dict()})
-    return pd.DataFrame(out)
-
-
-def main(args):
+def main():
     OUT.mkdir(parents=True, exist_ok=True)
     torch.backends.quantized.engine = ENGINE
     torch.set_num_threads(EVAL_THREADS)
@@ -528,88 +429,50 @@ def main(args):
     y = torch.cat([labels for _, labels in val_batches]).numpy()
     fp32_logits = predict(load_fp32(config.num_classes).eval(), val_batches)
     fp32_ref = fp32_logits.argmax(1).numpy()
-    rows = [{"seed": None, "epoch": None, **metrics("FP32", fp32_logits, y, fp32_ref, classes)}]
-    log(f"validation: {len(y)} images; FP32 macro F1 {rows[0]['f1_macro']:.4f}; lr per epoch "
-        f"{[f'{lr_at(e):.3g}' for e in range(1, EPOCHS + 1)]}")
+    rows = [{"epoch": None, **metrics("FP32", fp32_logits, y, fp32_ref, classes)}]
+    log(f"validation: {len(y)} images; FP32 macro F1 {rows[0]['f1_macro']:.4f}")
 
-    history, infos = [], []
-    for seed in args.seeds:
-        h, info, selected, final = run(seed, config, (y, val_batches), fp32_ref, classes, device)
-        history += h
-        infos.append(info)
-        for name, model, epoch in ((f"QAT_seed{seed}", selected, info["selected_epoch"]),
-                                   (f"QAT_epoch10_seed{seed}", final, EPOCHS)):
-            int8 = to_int8(model)
-            check_quantized(int8)
-            logits = predict(int8, val_batches)
-            rows.append({"seed": seed, "epoch": epoch, **metrics(name, logits, y, fp32_ref, classes,
-                                                                 save_confusion=True)})
-            if abs(rows[-1]["f1_macro"] - next(r["val_f1_macro"] for r in h if r["epoch"] == epoch)) > 1e-12:
-                raise CheckFailed(f"{name}: metrics differ from the training-time evaluation")
-            if seed == SAVED_SEED and name.startswith("QAT_seed"):
-                torch.jit.save(torch.jit.script(int8), QAT_INT8)
-                reloaded = torch.jit.load(str(QAT_INT8), map_location="cpu").eval()
-                if not torch.equal(predict(reloaded, val_batches), logits):
-                    raise CheckFailed("the reloaded TorchScript file gives different outputs from the converted model")
-                rows[-1]["size_mb"] = QAT_INT8.stat().st_size / 1e6
-                log(f"saved {QAT_INT8} (epoch {epoch}, {rows[-1]['size_mb']:.2f} MB)")
-        pd.DataFrame(history).to_csv(OUT / "training_history.csv", index=False)  # progress, complete at the end
-    (OUT / "training_history.json").write_text(json.dumps(
-        {"selection": f"best INT8 validation macro F1 among epochs {SELECT_FROM}-{EPOCHS}", "runs": infos,
-         "history": history}, indent=2, default=float))
+    history, info, model = train(config, (y, val_batches), fp32_ref, classes, device)
+    int8 = to_int8(model)
+    check_quantized(int8)
+    logits = predict(int8, val_batches)
+    rows.append({"epoch": EPOCHS, **metrics("QAT", logits, y, fp32_ref, classes, save_confusion=True)})
+    if abs(rows[-1]["f1_macro"] - history[-1]["val_f1_macro"]) > 1e-12:
+        raise CheckFailed("final metrics differ from the training-time evaluation")
+    torch.jit.save(torch.jit.script(int8), QAT_INT8)
+    reloaded = torch.jit.load(str(QAT_INT8), map_location="cpu").eval()
+    if not torch.equal(predict(reloaded, val_batches), logits):
+        raise CheckFailed("the reloaded TorchScript file gives different outputs from the converted model")
+    rows[-1]["size_mb"] = QAT_INT8.stat().st_size / 1e6
+    log(f"saved {QAT_INT8} (epoch {EPOCHS}, {rows[-1]['size_mb']:.2f} MB)")
 
-    control, control_infos = [], []
-    for seed in args.seeds:
-        h, info, _, _ = run(seed, config, (y, val_batches), fp32_ref, classes, device, control=True)
-        control += h
-        control_infos.append(info)
-        for name, epoch in ((f"control_selected_seed{seed}", info["selected_epoch"]),
-                            (f"control_epoch10_seed{seed}", EPOCHS)):
-            r = next(r for r in h if r["epoch"] == epoch)
-            rows.append({"seed": seed, "epoch": epoch, "model": name,
-                         **{k: r[f"val_{k}"] for k in SCORES + ["identical_to_fp32_pct"]}})
-    pd.DataFrame(control).to_csv(OUT / "control_fp32_history.csv", index=False)
-    (OUT / "control_fp32_history.json").write_text(json.dumps(
-        {"description": "FP32 fine-tuned with the same 3-phase 10-epoch schedule (same lr, BN frozen after epoch 7), "
-                        "no fake quantization; FP32 validation metrics per epoch (epoch 0 = the FP32 model)",
-         "selection": f"best FP32 validation macro F1 among epochs {SELECT_FROM}-{EPOCHS}", "runs": control_infos,
-         "history": control}, indent=2, default=float))
-
-    table = pd.DataFrame(rows)
-    table.to_csv(OUT / "validation_results.csv", index=False)
-    summarize(table).to_csv(OUT / "validation_summary.csv", index=False)
+    pd.DataFrame(history).to_csv(OUT / "training_history.csv", index=False)
+    (OUT / "training_history.json").write_text(json.dumps({"run": info, "history": history}, indent=2, default=float))
+    pd.DataFrame(rows).to_csv(OUT / "validation_results.csv", index=False)
     plot_from_saved()
 
     (OUT / "settings.json").write_text(json.dumps({
-        "version": "v2 (3-phase schedule); v1 kept in quantization/qat/_v1_previous/",
         "fp32_checkpoint": str(CHECKPOINT.relative_to(ROOT)), "config": CONFIG,
         "model": "torchvision.models.quantization.resnet18(weights=None, quantize=False, num_classes=7), strict load",
         "fusion": "model.train(); fuse_model(is_qat=True)", "qconfig": f"get_default_qat_qconfig('{ENGINE}')",
         "qconfig_repr": str(get_default_qat_qconfig(ENGINE)), "engine": ENGINE,
         "weights": "INT8 per-channel symmetric (qint8, -128..127)",
         "activations": "INT8 per-tensor affine (quint8, reduce_range=True -> 0..127)",
-        "observer_init": "same 1,000 stratified training images as static PTQ for the seed (eval preprocessing, "
-                         "no gradient, BN eval, fake quant off), then the activation ranges of the static PTQ "
-                         "HistogramObserver calibration on those images and the PTQ per-channel weight ranges are "
+        "observer_init": "1,000 stratified training images (seed 42, same as the static PTQ calibration); the "
+                         "activation and per-channel weight ranges of a static PTQ calibration on those images are "
                          "copied into the QAT observers, so epoch 0 = static PTQ (checked)",
-        "seeds": args.seeds, "saved_seed": SAVED_SEED, "epochs": EPOCHS, "batch_size": config.batch_size,
+        "seed": SEED, "epochs": EPOCHS, "batch_size": config.batch_size,
         "optimizer": "Adam", "loss": "CrossEntropyLoss, class weights 'balanced' from the training split",
         "augmentation": config.augmentation,
         "schedule": {
             "adaptation": f"epochs 1-{ADAPTATION_END}: fake quant on, observers updating, BN updating, lr {LR} constant",
             "fine-tuning": f"epochs {ADAPTATION_END + 1}-{FINETUNE_END}: cosine lr decay from {LR}, observers and BN "
                            "updating",
-            "stabilization": f"epochs {SELECT_FROM}-{EPOCHS}: BN statistics frozen (after epoch {FINETUNE_END}), "
+            "stabilization": f"epochs {FINETUNE_END + 1}-{EPOCHS}: BN statistics frozen (after epoch {FINETUNE_END}), "
                              "observers disabled (scales/zero points fixed), weights keep training, lr continues "
                              "the cosine toward 0",
-            "lr_per_epoch": {e: lr_at(e) for e in range(1, EPOCHS + 1)},
-            "weights_trained_in_every_phase": True},
-        "selection": f"best INT8 validation macro F1 among epochs {SELECT_FROM}-{EPOCHS} (validation split; test never "
-                     "used); epoch 10 also reported without selection",
-        "selected_epochs": {i["seed"]: i["selected_epoch"] for i in infos},
-        "control": "same schedule from FP32 without fake quantization (BN frozen after epoch 7), FP32 evaluation, same "
-                   "selection rule",
-        "control_selected_epochs": {i["seed"]: i["selected_epoch"] for i in control_infos},
+            "lr_per_epoch": {e: lr_at(e) for e in range(1, EPOCHS + 1)}},
+        "saved_model": f"final model (epoch {EPOCHS}); validation only monitored, no epoch selection; test never used",
         "device_training": torch.cuda.get_device_name(0), "device_int8_eval": "cpu",
         "torch": torch.__version__, "num_workers": config.num_workers,
         "date_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
@@ -623,13 +486,11 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--seeds", type=int, nargs="+", default=[42, 1, 2])
     parser.add_argument("--plot-only", action="store_true", help="redraw the training curves from the saved CSVs")
-    arguments = parser.parse_args()
-    if arguments.plot_only:
+    if parser.parse_args().plot_only:
         plot_from_saved()
         sys.exit(0)
     try:
-        main(arguments)
+        main()
     except CheckFailed as error:
         sys.exit(f"CHECK FAILED, stopping: {error}")

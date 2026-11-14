@@ -3,7 +3,7 @@ by model and metric type, each CSV next to its plots. The only difference betwee
 
 Format:      every model runs as fused (Conv+BatchNorm+ReLU) TorchScript. FP32 and weight-only models are loaded
              into torchvision.models.quantization.resnet18 (quantize=False), fused with fuse_model() and traced
-             with torch.jit.trace; static PTQ and QAT are already fused INT8 TorchScript. Before anything is measured, each
+             with torch.jit.trace; QAT is already fused INT8 TorchScript. Before anything is measured, each
              fused model is checked against its unfused version (same predictions, logits equal up to rounding).
 Performance: accuracy, precision, recall, specificity, F1, AUC (macro averages, and per class), each with a
              95% bootstrap CI and a paired bootstrap against FP32 (same resamples for both models).
@@ -49,7 +49,6 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 PROJECT = ROOT / "resnet18_finetunning"
 WEIGHT_ONLY = ROOT / "quantization" / "ptq" / "weight_only"
-STATIC = ROOT / "quantization" / "ptq" / "static"
 QAT = ROOT / "quantization" / "qat"
 RESULTS = HERE / "results"
 sys.path[:0] = [str(PROJECT / "src"), str(WEIGHT_ONLY)]
@@ -63,7 +62,6 @@ CONFIG = "configs/strong_cosine25.yaml"
 CHECKPOINT = PROJECT / "results/strong_cosine25_resnet18/resnet18_baseline.pth"
 PER_CHANNEL = WEIGHT_ONLY / "results/resnet18_w8_perchannel.pt"
 PER_TENSOR = WEIGHT_ONLY / "results/resnet18_w8_pertensor.pt"
-STATIC_INT8 = STATIC / "resnet18_static_int8.pt"
 QAT_INT8 = QAT / "resnet18_qat_int8.pt"
 NUM_CLASSES = 7
 FORMAT = "fused + TorchScript"
@@ -112,29 +110,12 @@ MODELS = {  # name: weights (None = already TorchScript), unfused reference, fil
     "weight_only_per_tensor": dict(
         state=weight_only_state(PER_TENSOR), unfused=lambda: q.load_dequantized_resnet18(PER_TENSOR, NUM_CLASSES),
         file=PER_TENSOR, note="INT8 weights on disk, dequantized to FP32 at load: computes in FP32"),
-    "static_ptq": dict(state=None, unfused=None, file=STATIC_INT8,
-                       note="INT8 weights and activations (x86 engine), seed-42 calibration"),
     "qat": dict(state=None, unfused=None, file=QAT_INT8,
-                note="INT8 weights and activations (x86 engine), QAT v2 (3-phase schedule), seed 42, best of "
-                     "epochs 8-10"),
+                note="INT8 weights and activations (x86 engine), QAT, final model (epoch 10)"),
 }
-# Seed summaries, read from the results of the script that made each model (nothing is retrained here):
-# model folder: [(results file, model-name prefix there (+ seed number), name in the comparison table)]
-SEED_SUMMARIES = {
-    "static_ptq": [(STATIC / "results/validation_results.csv", "INT8_seed", "static_ptq")],
-    "qat": [(QAT / "results/validation_results.csv", "QAT_seed", "qat"),
-            (QAT / "results/validation_results.csv", "QAT_epoch10_seed", "qat_epoch10"),
-            (QAT / "results/validation_results.csv", "control_selected_seed", "fp32_control_selected"),
-            (QAT / "results/validation_results.csv", "control_epoch10_seed", "fp32_control_epoch10")],
-}
-QAT_MINUS_CONTROL = {  # comparison row: matching FP32-control row (same selection rule; same seed or seed mean)
-    "qat": "fp32_control_selected_seed42", "qat_seed_mean": "fp32_control_selected_seed_mean",
-    "qat_epoch10_seed42": "fp32_control_epoch10_seed42", "qat_epoch10_seed_mean": "fp32_control_epoch10_seed_mean"}
-QAT_MINUS_CONTROL_METRICS = ("f1_macro", "accuracy", "melanoma_recall")
-
 
 def export_torchscript(workdir):
-    """Path of each model's fused TorchScript file. Static PTQ and QAT already are; the others are traced here."""
+    """Path of each model's fused TorchScript file. QAT already is one; the others are traced here."""
     paths = {}
     for name, spec in MODELS.items():
         if spec["state"] is None:
@@ -233,27 +214,6 @@ def ci(values):
     return float(np.percentile(values, 2.5)), float(np.percentile(values, 97.5))
 
 
-def seed_summary(name):
-    """Per-seed rows and mean/min/max over seeds: static PTQ (3 calibration seeds), or QAT (selected and epoch 10)
-    with its FP32 control (selected and epoch 10), from the results saved by the script that made them."""
-    parts = []
-    for path, prefix, label in SEED_SUMMARIES[name]:
-        table = pd.read_csv(path)
-        if "balanced_accuracy" not in table:  # older results: balanced accuracy is the macro recall
-            table["balanced_accuracy"] = table["recall_macro"]
-        seeds = table[table["model"].str.fullmatch(prefix + r"\d+")][["model", "seed", "epoch", *PERFORMANCE]
-                                                                      if "epoch" in table else
-                                                                      ["model", "seed", *PERFORMANCE]].copy()
-        if len(seeds) == 0:
-            sys.exit(f"CHECK FAILED: no '{prefix}<seed>' rows in {path}")
-        seeds["model"] = f"{label}_seed" + seeds["seed"].astype(int).astype(str)
-        numeric = seeds[list(PERFORMANCE)]
-        stats = pd.DataFrame([{"model": f"{label}_seed_{s}", **getattr(numeric, s)().to_dict()}
-                              for s in ("mean", "min", "max")])
-        parts += [seeds, stats]
-    return pd.concat(parts, ignore_index=True)
-
-
 def check_against_earlier_results(overall):
     """Fusing changes only rounding, so performance must equal the results saved when the models were made
     (exactly for prediction-based metrics; AUC, which uses probabilities, up to 1e-4)."""
@@ -264,13 +224,8 @@ def check_against_earlier_results(overall):
         for metric, old_metric in (("accuracy", "accuracy"), ("f1_macro", "macro_f1")):
             if abs(overall[name][metric] - weight_only.loc[old, old_metric]) > tolerance[metric]:
                 sys.exit(f"CHECK FAILED: {name} {metric} differs from {WEIGHT_ONLY}/results")
-    static = pd.read_csv(STATIC / "results/validation_results.csv").set_index("model")
-    for name, old in (("fp32", "FP32"), ("static_ptq", "INT8_seed42")):
-        for metric in (m for m in PERFORMANCE if m in static):
-            if abs(overall[name][metric] - static.loc[old, metric]) > tolerance[metric]:
-                sys.exit(f"CHECK FAILED: {name} {metric} differs from {STATIC}/results")
     qat = pd.read_csv(QAT / "results/validation_results.csv").set_index("model")
-    for name, old in (("fp32", "FP32"), ("qat", "QAT_seed42")):
+    for name, old in (("fp32", "FP32"), ("qat", "QAT")):
         for metric in (m for m in PERFORMANCE if m in qat):
             if abs(overall[name][metric] - qat.loc[old, metric]) > tolerance[metric]:
                 sys.exit(f"CHECK FAILED: {name} {metric} differs from {QAT}/results")
@@ -425,8 +380,6 @@ def main(args):
             save_csv(pd.DataFrame({"class": classes, **per_class}), folder, "per_class", split)
         if split == "validation":
             check_against_earlier_results(overall)
-            for name in SEED_SUMMARIES:
-                save_csv(seed_summary(name), RESULTS / name / "performance", "seed_summary", split)
 
         # Efficiency and environment: every model and thread count, back to back, in this session
         rows, samples = [], []
@@ -490,10 +443,7 @@ def main(args):
                     "torch.jit.trace",
             "weight_only_per_channel": "dequantized to FP32, then as fp32",
             "weight_only_per_tensor": "dequantized to FP32, then as fp32",
-            "static_ptq": "saved fused INT8 TorchScript (torch.jit.script), loaded as is",
-            "qat": "saved fused INT8 TorchScript (torch.jit.script), loaded as is (QAT v2, 3-phase schedule)"},
-        "fp32_control": "reference rows only (FP32 fine-tuned with the QAT schedule, no fake quantization), from "
-                        "quantization/qat/results/validation_results.csv; not timed",
+            "qat": "saved fused INT8 TorchScript (torch.jit.script), loaded as is"},
         "fused_vs_unfused_check": fused_check.to_dict(orient="records"),
         "cpu": subprocess.run("lscpu | grep 'Model name'", shell=True, capture_output=True,
                               text=True).stdout.split(":")[-1].strip(),
@@ -519,26 +469,6 @@ def main(args):
 def write_comparison(split):
     out = RESULTS / "comparison"
     perf = pd.concat([pd.read_csv(RESULTS / m / "performance" / f"metrics_{split}.csv") for m in MODELS])
-    every_seed = []
-    for name in SEED_SUMMARIES:
-        seeds = RESULTS / name / "performance" / f"seed_summary_{split}.csv"
-        if seeds.exists():
-            seeds = pd.read_csv(seeds)
-            every_seed.append(seeds)
-            perf = pd.concat([perf, seeds[seeds["model"].str.contains(r"_seed_(?:mean|min|max)$")]],
-                             ignore_index=True)
-    # FP32 control as reference rows, and QAT - control (the comparison that isolates fake quantization)
-    lookup = pd.concat([perf, *every_seed], ignore_index=True).drop_duplicates("model").set_index("model")
-    extra = [m for m in ("qat_epoch10_seed42", "fp32_control_selected_seed42", "fp32_control_epoch10_seed42")
-             if m in lookup.index and m not in set(perf["model"])]
-    perf = pd.concat([perf, lookup.loc[extra].reset_index()], ignore_index=True)
-    for metric in QAT_MINUS_CONTROL_METRICS:
-        perf[f"{metric}_qat_minus_control"] = np.nan
-    for qat_row, control_row in QAT_MINUS_CONTROL.items():
-        if qat_row in lookup.index and control_row in lookup.index:
-            for metric in QAT_MINUS_CONTROL_METRICS:
-                perf.loc[perf["model"] == qat_row, f"{metric}_qat_minus_control"] = (
-                    lookup.loc[qat_row, metric] - lookup.loc[control_row, metric])
     save_csv(perf.drop(columns="note"), out / "performance", "table", split)
 
     eff = pd.concat([pd.read_csv(RESULTS / m / "efficiency" / f"metrics_{split}.csv") for m in MODELS])
