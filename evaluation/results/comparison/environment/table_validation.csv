@@ -1,5 +1,6 @@
 model,format,threads,energy_wh_per_1000,co2e_g_per_1000,estimated_power_w,seconds_per_run,source,grid_g_per_kwh,country,energy_wh_per_1000_change_vs_fp32_pct,co2e_g_per_1000_change_vs_fp32_pct
-fp32,fused + TorchScript,1,3.290980227563548,1.855968045215828,251.0924507497845,72.92673463199753,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,0.0,0.0
-weight_only_per_channel,fused + TorchScript,1,3.273180219776819,1.845929624024456,249.83069538024688,72.66817730898038,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-0.5408725229536504,-0.5408725229536282
-weight_only_per_tensor,fused + TorchScript,1,3.3285700702091945,1.8771670625148968,253.37229248851912,72.7318810550496,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,1.142208097478492,1.1422080974785143
-static_ptq,fused + TorchScript,1,0.4526973842965637,0.2553014060583529,255.29815087465127,69.0417066689115,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-86.24429947937685,-86.24429947937685
+fp32,fused + TorchScript,1,3.3326322589119397,1.879457958206942,252.28850912677223,72.44476959691383,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,0.0,0.0
+weight_only_per_channel,fused + TorchScript,1,3.4186844613839997,1.9279876141042749,254.9615314974592,73.8417802748736,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,2.582109149365164,2.5821091493651416
+weight_only_per_tensor,fused + TorchScript,1,3.249069764984218,1.83233238838144,255.81299653110452,70.28493134095334,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-2.5074021804915136,-2.5074021804915025
+static_ptq,fused + TorchScript,1,0.4534382176380259,0.2557192034662706,255.38023765372984,69.05132773891091,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-86.3939918235663,-86.39399182356628
+qat,fused + TorchScript,1,0.460250353151387,0.2595609481618437,255.3275273536618,69.0263647660613,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-86.18958476679775,-86.18958476679775

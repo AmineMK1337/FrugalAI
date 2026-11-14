@@ -1,2 +1,2 @@
 model,format,threads,energy_wh_per_1000,co2e_g_per_1000,estimated_power_w,seconds_per_run,source,grid_g_per_kwh,country
-weight_only_per_tensor,fused + TorchScript,1,3.3285700702091945,1.8771670625148966,253.37229248851912,72.7318810550496,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN
+weight_only_per_tensor,fused + TorchScript,1,3.249069764984218,1.8323323883814402,255.81299653110455,70.28493134095334,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN

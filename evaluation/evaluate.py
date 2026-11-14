@@ -3,7 +3,7 @@ by model and metric type, each CSV next to its plots. The only difference betwee
 
 Format:      every model runs as fused (Conv+BatchNorm+ReLU) TorchScript. FP32 and weight-only models are loaded
              into torchvision.models.quantization.resnet18 (quantize=False), fused with fuse_model() and traced
-             with torch.jit.trace; static PTQ is already fused TorchScript. Before anything is measured, each
+             with torch.jit.trace; static PTQ and QAT are already fused INT8 TorchScript. Before anything is measured, each
              fused model is checked against its unfused version (same predictions, logits equal up to rounding).
 Performance: accuracy, precision, recall, specificity, F1, AUC (macro averages, and per class), each with a
              95% bootstrap CI and a paired bootstrap against FP32 (same resamples for both models).
@@ -50,6 +50,7 @@ ROOT = HERE.parent
 PROJECT = ROOT / "resnet18_finetunning"
 WEIGHT_ONLY = ROOT / "quantization" / "ptq" / "weight_only"
 STATIC = ROOT / "quantization" / "ptq" / "static"
+QAT = ROOT / "quantization" / "qat"
 RESULTS = HERE / "results"
 sys.path[:0] = [str(PROJECT / "src"), str(WEIGHT_ONLY)]
 os.chdir(PROJECT)  # config and split paths are relative to the fine-tuning project
@@ -63,6 +64,7 @@ CHECKPOINT = PROJECT / "results/strong_cosine25_resnet18/resnet18_baseline.pth"
 PER_CHANNEL = WEIGHT_ONLY / "results/resnet18_w8_perchannel.pt"
 PER_TENSOR = WEIGHT_ONLY / "results/resnet18_w8_pertensor.pt"
 STATIC_INT8 = STATIC / "resnet18_static_int8.pt"
+QAT_INT8 = QAT / "resnet18_qat_int8.pt"
 NUM_CLASSES = 7
 FORMAT = "fused + TorchScript"
 BATCH_SIZE = 32
@@ -110,15 +112,21 @@ MODELS = {  # name: weights (None = already TorchScript), unfused reference, fil
         file=PER_TENSOR, note="INT8 weights on disk, dequantized to FP32 at load: computes in FP32"),
     "static_ptq": dict(state=None, unfused=None, file=STATIC_INT8,
                        note="INT8 weights and activations (x86 engine), seed-42 calibration"),
+    "qat": dict(state=None, unfused=None, file=QAT_INT8,
+                note="INT8 weights and activations (x86 engine), quantization-aware training, seed 42, best epoch"),
+}
+SEED_SUMMARIES = {  # model: (results file of the script that made it, model-name prefix there)
+    "static_ptq": (STATIC / "results/validation_results.csv", "INT8_seed"),
+    "qat": (QAT / "results/validation_results.csv", "QAT_seed"),
 }
 
 
 def export_torchscript(workdir):
-    """Path of each model's fused TorchScript file. Static PTQ already is one; the others are traced here."""
+    """Path of each model's fused TorchScript file. Static PTQ and QAT already are; the others are traced here."""
     paths = {}
     for name, spec in MODELS.items():
         if spec["state"] is None:
-            paths[name] = STATIC_INT8
+            paths[name] = spec["file"]
         else:
             paths[name] = Path(workdir) / f"{name}.pt"
             torch.jit.save(fused_torchscript(spec["state"]()), paths[name])
@@ -212,13 +220,15 @@ def ci(values):
     return float(np.percentile(values, 2.5)), float(np.percentile(values, 97.5))
 
 
-def static_seed_summary():
-    """The 3 calibration seeds of static PTQ, from quantization/ptq/static/results (nothing is recalibrated)."""
-    table = pd.read_csv(STATIC / "results/validation_results.csv")
+def seed_summary(name):
+    """The 3 seeds of static PTQ (calibration) or QAT (calibration + training), from the results saved by the script
+    that made them (nothing is recalibrated or retrained)."""
+    path, _ = SEED_SUMMARIES[name]
+    table = pd.read_csv(path)
     seeds = table[table["model"] != "FP32"][["model", *PERFORMANCE]].copy()
-    seeds["model"] = "static_ptq_seed" + table.loc[seeds.index, "seed"].astype(int).astype(str)
+    seeds["model"] = f"{name}_seed" + table.loc[seeds.index, "seed"].astype(int).astype(str)
     numeric = seeds.drop(columns="model")
-    stats = pd.DataFrame([{"model": f"static_ptq_seed_{s}", **getattr(numeric, s)().to_dict()}
+    stats = pd.DataFrame([{"model": f"{name}_seed_{s}", **getattr(numeric, s)().to_dict()}
                           for s in ("mean", "min", "max")])
     return pd.concat([seeds, stats], ignore_index=True)
 
@@ -238,6 +248,11 @@ def check_against_earlier_results(overall):
         for metric in PERFORMANCE:
             if abs(overall[name][metric] - static.loc[old, metric]) > tolerance[metric]:
                 sys.exit(f"CHECK FAILED: {name} {metric} differs from {STATIC}/results")
+    qat = pd.read_csv(QAT / "results/validation_results.csv").set_index("model")
+    for name, old in (("fp32", "FP32"), ("qat", "QAT_seed42")):
+        for metric in PERFORMANCE:
+            if abs(overall[name][metric] - qat.loc[old, metric]) > tolerance[metric]:
+                sys.exit(f"CHECK FAILED: {name} {metric} differs from {QAT}/results")
     print("Performance matches the results saved when the models were made", flush=True)
 
 
@@ -387,7 +402,8 @@ def main(args):
             save_csv(pd.DataFrame({"class": classes, **per_class}), folder, "per_class", split)
         if split == "validation":
             check_against_earlier_results(overall)
-            save_csv(static_seed_summary(), RESULTS / "static_ptq" / "performance", "seed_summary", split)
+            for name in SEED_SUMMARIES:
+                save_csv(seed_summary(name), RESULTS / name / "performance", "seed_summary", split)
 
         # Efficiency and environment: every model and thread count, back to back, in this session
         rows, samples = [], []
@@ -451,7 +467,8 @@ def main(args):
                     "torch.jit.trace",
             "weight_only_per_channel": "dequantized to FP32, then as fp32",
             "weight_only_per_tensor": "dequantized to FP32, then as fp32",
-            "static_ptq": "saved fused INT8 TorchScript (torch.jit.script), loaded as is"},
+            "static_ptq": "saved fused INT8 TorchScript (torch.jit.script), loaded as is",
+            "qat": "saved fused INT8 TorchScript (torch.jit.script), loaded as is"},
         "fused_vs_unfused_check": fused_check.to_dict(orient="records"),
         "cpu": subprocess.run("lscpu | grep 'Model name'", shell=True, capture_output=True,
                               text=True).stdout.split(":")[-1].strip(),
@@ -477,10 +494,11 @@ def main(args):
 def write_comparison(split):
     out = RESULTS / "comparison"
     perf = pd.concat([pd.read_csv(RESULTS / m / "performance" / f"metrics_{split}.csv") for m in MODELS])
-    seeds = RESULTS / "static_ptq" / "performance" / f"seed_summary_{split}.csv"
-    if seeds.exists():
-        seeds = pd.read_csv(seeds)
-        perf = pd.concat([perf, seeds[seeds["model"].str.startswith("static_ptq_seed_")]], ignore_index=True)
+    for name in SEED_SUMMARIES:
+        seeds = RESULTS / name / "performance" / f"seed_summary_{split}.csv"
+        if seeds.exists():
+            seeds = pd.read_csv(seeds)
+            perf = pd.concat([perf, seeds[seeds["model"].str.startswith(f"{name}_seed_")]], ignore_index=True)
     save_csv(perf.drop(columns="note"), out / "performance", "table", split)
 
     eff = pd.concat([pd.read_csv(RESULTS / m / "efficiency" / f"metrics_{split}.csv") for m in MODELS])

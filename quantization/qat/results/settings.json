@@ -1,0 +1,42 @@
+{
+  "fp32_checkpoint": "resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth",
+  "config": "configs/strong_cosine25.yaml",
+  "model": "torchvision.models.quantization.resnet18(weights=None, quantize=False, num_classes=7), strict load",
+  "fusion": "model.train(); fuse_model(is_qat=True)",
+  "qconfig": "get_default_qat_qconfig('x86')",
+  "qconfig_repr": "QConfig(activation=functools.partial(<class 'torch.ao.quantization.fake_quantize.FusedMovingAvgObsFakeQuantize'>, observer=<class 'torch.ao.quantization.observer.MovingAverageMinMaxObserver'>, quant_min=0, quant_max=255, reduce_range=True){}, weight=functools.partial(<class 'torch.ao.quantization.fake_quantize.FusedMovingAvgObsFakeQuantize'>, observer=<class 'torch.ao.quantization.observer.MovingAveragePerChannelMinMaxObserver'>, quant_min=-128, quant_max=127, dtype=torch.qint8, qscheme=torch.per_channel_symmetric){})",
+  "engine": "x86",
+  "weights": "INT8 per-channel symmetric (qint8, -128..127)",
+  "activations": "INT8 per-tensor affine (quint8, reduce_range=True -> 0..127)",
+  "observer_init": "same 1,000 stratified training images as static PTQ for the seed (eval preprocessing, no gradient, BN eval, fake quant off), then activation ranges copied from the static PTQ HistogramObserver calibration on those images (and PTQ per-channel weight ranges), so epoch 0 = static PTQ",
+  "seeds": [
+    42,
+    1,
+    2
+  ],
+  "saved_seed": 42,
+  "epochs": 10,
+  "batch_size": 32,
+  "optimizer": "Adam",
+  "lr": 1e-05,
+  "lr_schedule": "CosineAnnealingLR(T_max=10), stepped per epoch",
+  "loss": "CrossEntropyLoss, class weights 'balanced' from the training split",
+  "augmentation": "strong",
+  "freeze_bn_stats_after_epoch": 6,
+  "disable_observers_after_epoch": 8,
+  "selection": "epoch 0-10 with the best INT8 validation macro F1 (validation split; test never used)",
+  "control": "same fine-tuning from FP32 without fake quantization, BN frozen after epoch 6, FP32 evaluation",
+  "device_training": "NVIDIA A40-24Q",
+  "device_int8_eval": "cpu",
+  "torch": "2.12.0+cu126",
+  "num_workers": 4,
+  "date_utc": "2026-11-14T13:35:36+00:00",
+  "sha256_protected_files": {
+    "/home/salma/FrugalAI/resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth": "1233528ddb3f0ebab9eeae6dae36acbc98292cc9aa34dadb7e553d5852077927",
+    "/home/salma/FrugalAI/resnet18_finetunning/splits/ham10000_splits.csv": "d7b17a1900f233db66a2e76d66eea333863404c53ea4fa2c154dbecd6cfe4f82",
+    "/home/salma/FrugalAI/resnet18_finetunning/configs/strong_cosine25.yaml": "da7f6b852cd0d4a6d7715ee26a768c614f7cab1b14af562546360a9f4409f73e",
+    "/home/salma/FrugalAI/quantization/ptq/static/resnet18_static_int8.pt": "c39e9d50643b3ade45ee173df8c758fbf03dcddbe690f9a8ea3746872eeeb3bb",
+    "/home/salma/FrugalAI/quantization/ptq/static/results/validation_results.csv": "9182ebfcc4e037336433728f0692545af175c6c5bf4a1bccc23b0747a379d6e2",
+    "/home/salma/FrugalAI/quantization/ptq/static/results/calibration_images.csv": "c4a929ebc85a3b714c26377d996a0d5fe6aeec4cf15660e69e68acabb3c4b24b"
+  }
+}
