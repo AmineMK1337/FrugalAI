@@ -1,4 +1,5 @@
 {
+  "version": "v2 (3-phase schedule); v1 kept in quantization/qat/_v1_previous/",
   "fp32_checkpoint": "resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth",
   "config": "configs/strong_cosine25.yaml",
   "model": "torchvision.models.quantization.resnet18(weights=None, quantize=False, num_classes=7), strict load",
@@ -8,7 +9,7 @@
   "engine": "x86",
   "weights": "INT8 per-channel symmetric (qint8, -128..127)",
   "activations": "INT8 per-tensor affine (quint8, reduce_range=True -> 0..127)",
-  "observer_init": "same 1,000 stratified training images as static PTQ for the seed (eval preprocessing, no gradient, BN eval, fake quant off), then activation ranges copied from the static PTQ HistogramObserver calibration on those images (and PTQ per-channel weight ranges), so epoch 0 = static PTQ",
+  "observer_init": "same 1,000 stratified training images as static PTQ for the seed (eval preprocessing, no gradient, BN eval, fake quant off), then the activation ranges of the static PTQ HistogramObserver calibration on those images and the PTQ per-channel weight ranges are copied into the QAT observers, so epoch 0 = static PTQ (checked)",
   "seeds": [
     42,
     1,
@@ -18,19 +19,43 @@
   "epochs": 10,
   "batch_size": 32,
   "optimizer": "Adam",
-  "lr": 1e-05,
-  "lr_schedule": "CosineAnnealingLR(T_max=10), stepped per epoch",
   "loss": "CrossEntropyLoss, class weights 'balanced' from the training split",
   "augmentation": "strong",
-  "freeze_bn_stats_after_epoch": 6,
-  "disable_observers_after_epoch": 8,
-  "selection": "epoch 0-10 with the best INT8 validation macro F1 (validation split; test never used)",
-  "control": "same fine-tuning from FP32 without fake quantization, BN frozen after epoch 6, FP32 evaluation",
+  "schedule": {
+    "adaptation": "epochs 1-2: fake quant on, observers updating, BN updating, lr 1e-05 constant",
+    "fine-tuning": "epochs 3-7: cosine lr decay from 1e-05, observers and BN updating",
+    "stabilization": "epochs 8-10: BN statistics frozen (after epoch 7), observers disabled (scales/zero points fixed), weights keep training, lr continues the cosine toward 0",
+    "lr_per_epoch": {
+      "1": 1e-05,
+      "2": 1e-05,
+      "3": 1e-05,
+      "4": 9.619397662556434e-06,
+      "5": 8.535533905932739e-06,
+      "6": 6.913417161825449e-06,
+      "7": 5e-06,
+      "8": 3.0865828381745515e-06,
+      "9": 1.4644660940672628e-06,
+      "10": 3.8060233744356634e-07
+    },
+    "weights_trained_in_every_phase": true
+  },
+  "selection": "best INT8 validation macro F1 among epochs 8-10 (validation split; test never used); epoch 10 also reported without selection",
+  "selected_epochs": {
+    "42": 10,
+    "1": 9,
+    "2": 9
+  },
+  "control": "same schedule from FP32 without fake quantization (BN frozen after epoch 7), FP32 evaluation, same selection rule",
+  "control_selected_epochs": {
+    "42": 10,
+    "1": 10,
+    "2": 8
+  },
   "device_training": "NVIDIA A40-24Q",
   "device_int8_eval": "cpu",
   "torch": "2.12.0+cu126",
   "num_workers": 4,
-  "date_utc": "2026-11-14T13:35:36+00:00",
+  "date_utc": "2026-11-14T17:35:05+00:00",
   "sha256_protected_files": {
     "/home/salma/FrugalAI/resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth": "1233528ddb3f0ebab9eeae6dae36acbc98292cc9aa34dadb7e553d5852077927",
     "/home/salma/FrugalAI/resnet18_finetunning/splits/ham10000_splits.csv": "d7b17a1900f233db66a2e76d66eea333863404c53ea4fa2c154dbecd6cfe4f82",

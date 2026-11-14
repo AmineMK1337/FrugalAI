@@ -1,2 +1,2 @@
 model,format,size_mb,gflops,latency_median_ms_1t,latency_p95_ms_1t,throughput_img_s_1t,peak_memory_mb_1t,latency_median_ms_4t,latency_p95_ms_4t,throughput_img_s_4t,peak_memory_mb_4t,note
-static_ptq,fused + TorchScript,11.322024,3.644641294,6.7693054443225265,6.927673309110105,155.92464976847924,52.7578125,2.278354950249195,2.30549470288679,583.1252491439996,52.53515625,"INT8 weights and activations (x86 engine), seed-42 calibration"
+static_ptq,fused + TorchScript,11.322024,3.644641294,6.785284029319882,6.8393574096262455,155.56388443095977,52.984375,2.2500919876620173,2.293651190120727,583.7187252087937,52.6328125,"INT8 weights and activations (x86 engine), seed-42 calibration"

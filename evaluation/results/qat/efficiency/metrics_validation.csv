@@ -1,2 +1,2 @@
 model,format,size_mb,gflops,latency_median_ms_1t,latency_p95_ms_1t,throughput_img_s_1t,peak_memory_mb_1t,latency_median_ms_4t,latency_p95_ms_4t,throughput_img_s_4t,peak_memory_mb_4t,note
-qat,fused + TorchScript,11.321539,3.644641294,6.774803972803056,6.973447301425038,155.45632842517117,53.00390625,2.2807634668424726,2.309334429446608,583.1219034309798,52.5,"INT8 weights and activations (x86 engine), quantization-aware training, seed 42, best epoch"
+qat,fused + TorchScript,11.321539,3.644641294,6.787256104871631,6.873741478193551,155.27822869014096,53.08203125,2.24873551633209,2.299572213087231,581.3951654735555,52.63671875,"INT8 weights and activations (x86 engine), QAT v2 (3-phase schedule), seed 42, best of epochs 8-10"

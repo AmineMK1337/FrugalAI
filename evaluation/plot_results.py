@@ -33,8 +33,9 @@ STYLE = {  # the same look for a model in every plot
 MODELS = list(STYLE)
 THREADS = (1, 4)
 FORMAT = "fused + TorchScript"
-PERFORMANCE = {"accuracy": "Accuracy", "precision_macro": "Precision", "recall_macro": "Recall",
-               "specificity_macro": "Specificity", "f1_macro": "F1-score", "auc_macro": "AUC (x100)"}
+PERFORMANCE = {"accuracy": "Accuracy", "precision_macro": "Precision", "recall_macro": "Recall\n(= balanced acc.)",
+               "specificity_macro": "Specificity", "f1_macro": "F1-score", "auc_macro": "AUC (x100)",
+               "melanoma_recall": "Melanoma\nrecall"}
 ESTIMATE_NOTE = "CodeCarbon estimate: no power counter on this VM, so it is roughly an assumed CPU power x run time."
 
 plt.rcParams.update({

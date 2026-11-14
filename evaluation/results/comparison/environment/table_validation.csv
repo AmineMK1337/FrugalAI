@@ -1,6 +1,6 @@
 model,format,threads,energy_wh_per_1000,co2e_g_per_1000,estimated_power_w,seconds_per_run,source,grid_g_per_kwh,country,energy_wh_per_1000_change_vs_fp32_pct,co2e_g_per_1000_change_vs_fp32_pct
-fp32,fused + TorchScript,1,3.3326322589119397,1.879457958206942,252.28850912677223,72.44476959691383,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,0.0,0.0
-weight_only_per_channel,fused + TorchScript,1,3.4186844613839997,1.9279876141042749,254.9615314974592,73.8417802748736,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,2.582109149365164,2.5821091493651416
-weight_only_per_tensor,fused + TorchScript,1,3.249069764984218,1.83233238838144,255.81299653110452,70.28493134095334,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-2.5074021804915136,-2.5074021804915025
-static_ptq,fused + TorchScript,1,0.4534382176380259,0.2557192034662706,255.38023765372984,69.05132773891091,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-86.3939918235663,-86.39399182356628
-qat,fused + TorchScript,1,0.460250353151387,0.2595609481618437,255.3275273536618,69.0263647660613,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-86.18958476679775,-86.18958476679775
+fp32,fused + TorchScript,1,3.427319073823338,1.9328571555971144,254.3209721771104,74.5842109231744,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,0.0,0.0
+weight_only_per_channel,fused + TorchScript,1,3.422104649841451,1.929916449905985,253.70944971837332,74.81735624279827,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-0.15214293941037127,-0.15214293941038237
+weight_only_per_tensor,fused + TorchScript,1,3.3745187755780752,1.903080110599909,252.15979340272332,73.83836386492476,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-1.5405714235518064,-1.5405714235518064
+static_ptq,fused + TorchScript,1,0.4534213843684428,0.2557097102428896,254.01936722619848,69.20480185002089,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-86.77037723649612,-86.77037723649612
+qat,fused + TorchScript,1,0.4470425643575297,0.252112336424815,254.3251578369114,69.05431937496178,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-86.95649413642622,-86.95649413642622

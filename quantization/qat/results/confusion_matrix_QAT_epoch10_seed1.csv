@@ -1,0 +1,8 @@
+,pred_akiec,pred_bcc,pred_bkl,pred_df,pred_mel,pred_nv,pred_vasc
+true_akiec,35,1,7,0,6,4,0
+true_bcc,5,68,2,0,1,6,0
+true_bkl,8,3,111,1,20,17,0
+true_df,2,2,0,12,6,2,0
+true_mel,1,1,15,0,130,26,0
+true_nv,1,15,27,4,70,899,2
+true_vasc,1,4,0,0,1,2,14
