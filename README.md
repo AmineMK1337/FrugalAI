@@ -141,6 +141,28 @@ From [evaluation/results/comparison/](evaluation/results/comparison/), CPU, fuse
 - **Weight-only INT8** makes the file 4× smaller with no significant change in accuracy or macro F1 (paired bootstrap, p ≥ 0.05). It gives no speed or energy gain, because the weights are dequantized back to FP32 when the model loads and the computation stays in FP32.
 - **INT8 QAT** is also 4× smaller and computes in INT8: 7.5× faster at 1 thread (6.9× at 4 threads), −31% peak RAM and an estimated −86% energy. Accuracy and macro F1 equal FP32 within noise (+0.52 and +0.14 points, p = 0.40 and 0.90). Melanoma recall is +6.94 points (95% paired-bootstrap CI +2.4 to +11.3). That gain comes from one training run (seed 42) and moves a lot from epoch to epoch (64–74% across epochs 1–10), so it needs to be confirmed on the test set.
 
+### Why 8-bit weights lose almost nothing: bit-width sweep
+
+[bitwidth_sweep.py](quantization/ptq/weight_only/bitwidth_sweep.py) applies the same weight-only integer scheme with 32, 24, 20 and 16 bits, then every width from 15 down to 2 (validation only; 8 bits reproduces the saved INT8 results exactly). The 16-bit float formats FP16 and BF16 are added for reference. Plot and full table (every bit width, with 95% bootstrap CIs): [results/bitwidth_sweep/](quantization/ptq/weight_only/results/bitwidth_sweep/).
+
+| Bits | Weight error, per-channel / per-tensor | Macro F1, per-channel | Macro F1, per-tensor | Identical to FP32, per-channel / per-tensor |
+|---|---|---|---|---|
+| FP32 (32-bit float) | 0 | 71.04 | 71.04 | 100 / 100 |
+| INT 32, 24, 20, 16 | ≤ 0.005% / ≤ 0.014% | 71.04 | 71.04 | 100 / 100 |
+| FP16 / BF16 (float, for reference) | 0.02% / 0.17% | 71.04 / 70.94 | – | 100 / 99.74 |
+| 12 | 0.08% / 0.22% | 70.98 | 71.37 | 99.93 / 99.87 |
+| 10 | 0.33% / 0.89% | 71.49 | 71.20 | 99.67 / 98.89 |
+| 9 | 0.66% / 1.79% | 71.60 | 71.38 | 98.69 / 98.50 |
+| 8 | 1.3% / 3.6% | 71.03 | 70.22 | 97.72 / 96.54 |
+| 7 | 2.7% / 7.2% | 70.64 | 69.66 |
+| 6 | 5.4% / 14.7% | 65.67 | 66.15 |
+| 5 | 11.2% / 30.3% | 57.45 | 48.39 |
+| 4 | 23.8% / 60.7% | 36.69 | 11.24 |
+| 3 | 51.3% / 89.3% | 14.42 | 11.41 |
+| 2 | 91.6% / 99.1% | 11.41 | 11.41 |
+
+From 32 down to 16 bits nothing changes: the predictions are 100% identical to FP32, because an FP32 weight carries only 24 bits of precision, and at 16 bits the rounding error is at most 0.014%. Between 15 and 9 bits a few images (at most 1.5%) change class, in both directions, and every metric stays at the FP32 level. Each bit removed doubles the weight error. At 8 and 7 bits the error (1–7%) stays within what the network tolerates, and macro F1 stays within the FP32 confidence interval. From 6 bits down, performance degrades, and it collapses at 4 bits: per-channel macro F1 falls to 37, and per-tensor ends up predicting "nv" for every image. That gives 66.45% accuracy (the share of nv in the validation set) but macro F1 11.4 and melanoma recall 0. Accuracy alone hides this collapse, which is why macro F1 and melanoma recall are the main metrics. Per-channel scales hold up about one bit longer than per-tensor scales.
+
 ## Next steps
 
 - Once every model is final, evaluate all of them once on the held-out test set (`python evaluation/evaluate.py --split test`).
