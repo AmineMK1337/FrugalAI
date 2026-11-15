@@ -1,0 +1,128 @@
+{
+  "run": "pruned30_seed42",
+  "target_ratio": 0.3,
+  "seed": 42,
+  "dependency_groups_prunable": [
+    [
+      "layer4.0.conv2",
+      "layer4.0.downsample.0",
+      "layer4.1.conv2"
+    ],
+    [
+      "layer3.0.conv2",
+      "layer3.0.downsample.0",
+      "layer3.1.conv2"
+    ],
+    [
+      "layer2.0.conv2",
+      "layer2.0.downsample.0",
+      "layer2.1.conv2"
+    ],
+    [
+      "layer1.0.conv1"
+    ],
+    [
+      "layer1.1.conv1"
+    ],
+    [
+      "layer2.0.conv1"
+    ],
+    [
+      "layer2.1.conv1"
+    ],
+    [
+      "layer3.0.conv1"
+    ],
+    [
+      "layer3.1.conv1"
+    ],
+    [
+      "layer4.0.conv1"
+    ],
+    [
+      "layer4.1.conv1"
+    ]
+  ],
+  "channel_reduction_pct_all_convs": 28.95833333333333,
+  "channel_reduction_pct_excluding_stem": 29.34966216216216,
+  "params_before": 11180103,
+  "params_after": 5516609,
+  "param_reduction_pct": 50.65690360813313,
+  "gmacs_before": 1.820915719,
+  "gmacs_after": 1.056335203,
+  "gmac_reduction_pct": 41.988792123772086,
+  "achieved_out_ratio_min_pct": 30.078125,
+  "achieved_out_ratio_max_pct": 31.25,
+  "convs_with_unpruned_outputs": [
+    "conv1",
+    "layer1.0.conv2",
+    "layer1.1.conv2"
+  ],
+  "before_finetuning": {
+    "accuracy": 0.6494778067885117,
+    "balanced_accuracy": 0.1403820516418748,
+    "precision_macro": 0.09899473808214874,
+    "recall_macro": 0.1403820516418748,
+    "specificity_macro": 0.8564861106834538,
+    "f1_macro": 0.1143503375158924,
+    "auc_macro": 0.4971639502369851,
+    "melanoma_recall": 0.0,
+    "identical_to_fp32_pct": 61.55352480417755,
+    "val_loss": 2.92618727684021
+  },
+  "selected_epoch": 10,
+  "selected": {
+    "accuracy": 0.7669712793733682,
+    "balanced_accuracy": 0.6702970748755112,
+    "precision_macro": 0.6177650752026985,
+    "recall_macro": 0.6702970748755112,
+    "specificity_macro": 0.9554255490141303,
+    "f1_macro": 0.6324549745827561,
+    "auc_macro": 0.9453941958446113,
+    "melanoma_recall": 0.7341040462427746,
+    "identical_to_fp32_pct": 81.72323759791122,
+    "val_loss": 1.1022611856460571
+  },
+  "epoch10": {
+    "accuracy": 0.7669712793733682,
+    "balanced_accuracy": 0.6702970748755112,
+    "precision_macro": 0.6177650752026985,
+    "recall_macro": 0.6702970748755112,
+    "specificity_macro": 0.9554255490141303,
+    "f1_macro": 0.6324549745827561,
+    "auc_macro": 0.9453941958446113,
+    "melanoma_recall": 0.7341040462427746,
+    "identical_to_fp32_pct": 81.72323759791122,
+    "val_loss": 1.1022611856460571
+  },
+  "files": {
+    "selected": "pruning/structured/models/pruned30_seed42_selected.pt",
+    "epoch10": "pruning/structured/models/pruned30_seed42_epoch10.pt"
+  },
+  "settings": {
+    "checkpoint": "resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth",
+    "config": "configs/strong_cosine25.yaml",
+    "model": "torchvision.models.quantization.resnet18(weights=None, quantize=False, num_classes=7), strict load",
+    "pruning": "Torch-Pruning DependencyGraph + BasePruner, local (global_pruning=False), same target ratio for every prunable channel group, ignored_layers=[conv1, fc]",
+    "importance": "L1 norm of each output filter; averaged over the convs whose outputs share a channel group",
+    "fine_tuning": {
+      "epochs": 10,
+      "optimizer": "Adam",
+      "lr": 0.0001,
+      "schedule": "CosineAnnealingLR(T_max=10), stepped per epoch",
+      "batch_size": 32,
+      "augmentation": "strong",
+      "loss": "CrossEntropyLoss, balanced class weights from the train split"
+    },
+    "selection": "best validation macro F1 epoch (first maximum); epoch 10 also reported",
+    "torch": "2.12.0+cu126",
+    "torch_pruning": "1.6.1",
+    "torch_pruning_module_version": "1.6.0",
+    "gpu": "NVIDIA A40-24Q",
+    "sha256_protected": {
+      "/home/salma/FrugalAI/resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth": "1233528ddb3f0ebab9eeae6dae36acbc98292cc9aa34dadb7e553d5852077927",
+      "/home/salma/FrugalAI/resnet18_finetunning/splits/ham10000_splits.csv": "d7b17a1900f233db66a2e76d66eea333863404c53ea4fa2c154dbecd6cfe4f82",
+      "/home/salma/FrugalAI/resnet18_finetunning/configs/strong_cosine25.yaml": "da7f6b852cd0d4a6d7715ee26a768c614f7cab1b14af562546360a9f4409f73e"
+    }
+  }
+}

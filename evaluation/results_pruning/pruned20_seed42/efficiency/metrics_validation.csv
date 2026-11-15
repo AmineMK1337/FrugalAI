@@ -1,0 +1,2 @@
+model,format,size_mb,gflops,params,latency_median_ms_1t,latency_p95_ms_1t,throughput_img_s_1t,peak_memory_mb_1t,latency_median_ms_4t,latency_p95_ms_4t,throughput_img_s_4t,peak_memory_mb_4t,note
+pruned20_seed42,fused + TorchScript,28.753419,2.578341248,7166367,42.44240850675851,43.338893074542284,25.339752419510614,61.8046875,13.21082713548094,13.515635917428881,87.992673048353,63.80859375,"FP32, structured pruning (target 20% channels), best validation macro F1 epoch"

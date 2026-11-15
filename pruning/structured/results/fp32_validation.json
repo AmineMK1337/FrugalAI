@@ -1,0 +1,11 @@
+{
+  "accuracy": 0.8218015665796344,
+  "balanced_accuracy": 0.7149614518412524,
+  "precision_macro": 0.7230659670702942,
+  "recall_macro": 0.7149614518412524,
+  "specificity_macro": 0.9618740054225882,
+  "f1_macro": 0.710427484075019,
+  "auc_macro": 0.9634144710708737,
+  "melanoma_recall": 0.6647398843930635,
+  "identical_to_fp32_pct": 100.0
+}

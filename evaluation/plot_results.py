@@ -30,6 +30,24 @@ STYLE = {  # the same look for a model in every plot
     "qat": dict(label="INT8 QAT", short="INT8\nQAT", color="#8b5cc7", hatch="..."),
 }
 MODELS = list(STYLE)
+PRUNED_COLORS = {10: "#f2c4a8", 20: "#e08a5c", 30: "#c25420", 40: "#7a2e0c"}  # light to dark = more pruning
+PRUNED_HATCHES = {10: "..", 20: "//", 30: "xx", 40: "\\\\"}
+
+
+def add_style(model):
+    """Styles for structured-pruning runs: pruned<ratio>_seed<s> and control_seed<s>."""
+    if model in STYLE:
+        return
+    seed = model.rsplit("_seed", 1)[-1]
+    if model.startswith("control"):
+        STYLE[model] = dict(label=f"FP32 control (fine-tuned, seed {seed})", short=f"FP32\ncontrol s{seed}",
+                            color="#9a9a9a", hatch="--")
+    elif model.startswith("pruned"):
+        ratio = int(model[len("pruned"):].split("_")[0])
+        STYLE[model] = dict(label=f"Pruned {ratio}% (seed {seed})", short=f"Pruned\n{ratio}% s{seed}",
+                            color=PRUNED_COLORS.get(ratio, "#c25420"), hatch=PRUNED_HATCHES.get(ratio, "//"))
+    else:
+        raise KeyError(f"no plot style for {model}")
 THREADS = (1, 4)
 FORMAT = "fused + TorchScript"
 PERFORMANCE = {"accuracy": "Accuracy", "precision_macro": "Precision", "recall_macro": "Recall\n(= balanced acc.)",
@@ -358,7 +376,14 @@ def comparison(split):
         save(fig, out / "environment", name, split)
 
 
-def main(split="validation"):
+def main(split="validation", results=None, models=None):
+    global RESULTS, MODELS
+    if results is not None:
+        RESULTS = Path(results)
+    if models is not None:
+        for m in models:
+            add_style(m)
+        MODELS = list(models)
     for model in MODELS:
         model_plots(model, split)
     comparison(split)
@@ -368,4 +393,7 @@ def main(split="validation"):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--split", choices=["validation", "test"], default="validation")
-    main(parser.parse_args().split)
+    parser.add_argument("--results-dir", help="folder written by evaluate.py (default evaluation/results)")
+    parser.add_argument("--models", nargs="+", help="models in that folder (default: the four main models)")
+    a = parser.parse_args()
+    main(a.split, Path(a.results_dir).resolve() if a.results_dir else None, a.models)

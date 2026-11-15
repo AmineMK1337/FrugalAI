@@ -16,7 +16,14 @@ Environment: energy and CO2e per 1,000 images at 1 thread, ESTIMATED by CodeCarb
 
 Nothing is trained, calibrated or modified; model files, split and config are hashed before and after the run.
 
-Usage: python evaluation/evaluate.py [--split validation|test] [--repeats 3] [--country TUN]
+Structured pruning (pruning/structured/): pruned and FP32-control models are whole saved modules
+(pruning/structured/models/<run>_selected.pt), fused with fuse_model() and traced like FP32. FLOPs and parameters are
+counted on each model's own architecture. They are evaluated in a separate session and folder, with FP32 re-measured
+there as the timing reference:
+  python evaluation/evaluate.py --models fp32 pruned20_seed42 ... --results-dir evaluation/results_pruning
+
+Usage: python evaluation/evaluate.py [--split validation|test] [--repeats 3] [--country TUN] [--models ...]
+       [--results-dir DIR]
 Writes evaluation/results/<model>/<metric_type>/, evaluation/results/comparison/<metric_type>/ and
 evaluation/results/run_info.json, then draws the plots (evaluation/plot_results.py).
 """
@@ -50,8 +57,10 @@ ROOT = HERE.parent
 PROJECT = ROOT / "resnet18_finetunning"
 WEIGHT_ONLY = ROOT / "quantization" / "ptq" / "weight_only"
 QAT = ROOT / "quantization" / "qat"
+PRUNING = ROOT / "pruning" / "structured"
 RESULTS = HERE / "results"
 sys.path[:0] = [str(PROJECT / "src"), str(WEIGHT_ONLY)]
+LAUNCH_DIR = Path.cwd()  # relative --results-dir is taken from where the script is launched
 os.chdir(PROJECT)  # config and split paths are relative to the fine-tuning project
 
 import quantize as q  # noqa: E402
@@ -113,12 +122,36 @@ MODELS = {  # name: weights (None = already TorchScript), unfused reference, fil
     "qat": dict(state=None, unfused=None, file=QAT_INT8,
                 note="INT8 weights and activations (x86 engine), QAT, final model (epoch 10)"),
 }
+DEFAULT_MODELS = list(MODELS)
+
+
+def saved_module(path):
+    """A whole model saved by pruning/structured/prune.py (own file: weights_only=False), eval mode."""
+    return lambda: torch.load(path, map_location="cpu", weights_only=False).eval()
+
+
+def fused_module_torchscript(module):
+    module.eval().fuse_model()
+    with torch.no_grad():
+        return torch.jit.trace(module, torch.zeros(1, 3, 224, 224))
+
+
+for _path in sorted((PRUNING / "models").glob("*_selected.pt")):  # pruned<ratio>_seed<s>, control_seed<s>
+    _name = _path.name[:-len("_selected.pt")]
+    MODELS[_name] = dict(
+        state=None, module=saved_module(_path), unfused=saved_module(_path), file=_path,
+        note=("FP32 control: unpruned, fine-tuned with the pruning schedule" if _name.startswith("control")
+              else f"FP32, structured pruning (target {_name[6:].split('_')[0]}% channels)")
+        + ", best validation macro F1 epoch")
 
 def export_torchscript(workdir):
     """Path of each model's fused TorchScript file. QAT already is one; the others are traced here."""
     paths = {}
     for name, spec in MODELS.items():
-        if spec["state"] is None:
+        if "module" in spec:
+            paths[name] = Path(workdir) / f"{name}.pt"
+            torch.jit.save(fused_module_torchscript(spec["module"]()), paths[name])
+        elif spec["state"] is None:
             paths[name] = spec["file"]
         else:
             paths[name] = Path(workdir) / f"{name}.pt"
@@ -218,14 +251,28 @@ def check_against_earlier_results(overall):
     """Fusing changes only rounding, so performance must equal the results saved when the models were made
     (exactly for prediction-based metrics; AUC, which uses probabilities, up to 1e-4)."""
     tolerance = {m: 1e-9 for m in PERFORMANCE} | {"auc_macro": 1e-4}
+    for name in (n for n in MODELS if n.startswith(("pruned", "control"))):
+        # saved by prune.py from GPU logits: a prediction near a tie may flip on the CPU, so allow 2 images
+        saved = pd.read_csv(PRUNING / "results" / name / "metrics.csv")
+        saved = saved[saved["stage"].str.startswith("selected")].iloc[0]
+        diff = abs(overall[name]["accuracy"] - saved["accuracy"]) * overall[name]["n_images"]
+        print(f"{name}: accuracy differs from the prune.py validation result by {diff:.0f} image(s)", flush=True)
+        if diff > 2:
+            sys.exit(f"CHECK FAILED: {name} accuracy differs from {PRUNING}/results by {diff:.0f} images")
+    if "fp32" not in MODELS:
+        return
     weight_only = pd.read_csv(WEIGHT_ONLY / "results/validation_results.csv").set_index("model")
     for name, old in (("fp32", "FP32"), ("weight_only_per_channel", "per_channel"),
                       ("weight_only_per_tensor", "per_tensor")):
+        if name not in MODELS:
+            continue
         for metric, old_metric in (("accuracy", "accuracy"), ("f1_macro", "macro_f1")):
             if abs(overall[name][metric] - weight_only.loc[old, old_metric]) > tolerance[metric]:
                 sys.exit(f"CHECK FAILED: {name} {metric} differs from {WEIGHT_ONLY}/results")
     qat = pd.read_csv(QAT / "results/validation_results.csv").set_index("model")
     for name, old in (("fp32", "FP32"), ("qat", "QAT")):
+        if name not in MODELS:
+            continue
         for metric in (m for m in PERFORMANCE if m in qat):
             if abs(overall[name][metric] - qat.loc[old, metric]) > tolerance[metric]:
                 sys.exit(f"CHECK FAILED: {name} {metric} differs from {QAT}/results")
@@ -309,15 +356,22 @@ def worker(args):
     Path(args.out).write_text(json.dumps(measure(args.model_path, args.threads, args.workdir, args.country)))
 
 
-def flops():
-    """Same for every model: the fused FP32 architecture (ptflops cannot count TorchScript or INT8 ops)."""
+def flops_and_params(name):
+    """GFLOPs (ptflops MACs x 2) on the fused architecture, and parameters on the unfused one. Pruned and control
+    models: their own architecture. Every other model has the FP32 architecture (ptflops cannot count TorchScript
+    or INT8 ops)."""
     from ptflops import get_model_complexity_info
-    model = quantizable_resnet18(weights=None, quantize=False, num_classes=NUM_CLASSES)
-    model.load_state_dict(fp32_state(), strict=True)
+    spec = MODELS[name]
+    if "module" in spec:
+        model = spec["module"]()
+    else:
+        model = quantizable_resnet18(weights=None, quantize=False, num_classes=NUM_CLASSES)
+        model.load_state_dict(fp32_state(), strict=True)
+    params = sum(p.numel() for p in model.parameters())
     model.eval().fuse_model()
     macs, _ = get_model_complexity_info(model, (3, 224, 224), as_strings=False, print_per_layer_stat=False,
                                         verbose=False)
-    return 2 * macs / 1e9
+    return 2 * macs / 1e9, params
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -328,6 +382,13 @@ def save_csv(table, folder, name, split):
 
 
 def main(args):
+    global MODELS, RESULTS
+    unknown = [m for m in args.models if m not in MODELS]
+    if unknown:
+        sys.exit(f"unknown model(s) {unknown}; available: {list(MODELS)}")
+    MODELS = {m: MODELS[m] for m in args.models}
+    RESULTS = (LAUNCH_DIR / args.results_dir).resolve() if args.results_dir else RESULTS
+    RESULTS.mkdir(parents=True, exist_ok=True)
     split = args.split
     config = load_config(CONFIG)
     tracked = {**{name: spec["file"] for name, spec in MODELS.items()},
@@ -405,11 +466,11 @@ def main(args):
     medians = runs.drop(columns=["repeat", "format"]).groupby(["model", "threads"]).median()
     energy_columns = ["energy_seconds", "energy_images", "energy_wh_per_1000", "co2e_g_per_1000",
                       "estimated_power_w", "grid_g_per_kwh"]
-    gflops = flops()
 
     for name in MODELS:
+        gflops, params = flops_and_params(name)
         efficiency = {"model": name, "format": FORMAT, "size_mb": MODELS[name]["file"].stat().st_size / 1e6,
-                      "gflops": gflops}
+                      "gflops": gflops, "params": params}
         for t in THREADS:
             m = medians.loc[(name, t)]
             efficiency.update({f"latency_median_ms_{t}t": m["latency_median_ms"],
@@ -443,7 +504,9 @@ def main(args):
                     "torch.jit.trace",
             "weight_only_per_channel": "dequantized to FP32, then as fp32",
             "weight_only_per_tensor": "dequantized to FP32, then as fp32",
-            "qat": "saved fused INT8 TorchScript (torch.jit.script), loaded as is"},
+            "qat": "saved fused INT8 TorchScript (torch.jit.script), loaded as is",
+            "pruned / control": "whole saved FP32 module (pruning/structured/models), fuse_model(), torch.jit.trace"},
+        "models": list(MODELS),
         "fused_vs_unfused_check": fused_check.to_dict(orient="records"),
         "cpu": subprocess.run("lscpu | grep 'Model name'", shell=True, capture_output=True,
                               text=True).stdout.split(":")[-1].strip(),
@@ -463,7 +526,7 @@ def main(args):
     spec = importlib.util.spec_from_file_location("evaluation_plot_results", HERE / "plot_results.py")
     plot_results = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(plot_results)
-    plot_results.main(split)
+    plot_results.main(split, RESULTS, list(MODELS))
 
 
 def write_comparison(split):
@@ -499,5 +562,7 @@ if __name__ == "__main__":
     parser.add_argument("--threads", type=int, default=1)
     parser.add_argument("--workdir")
     parser.add_argument("--out")
+    parser.add_argument("--models", nargs="+", default=DEFAULT_MODELS, help="models to evaluate, in this order")
+    parser.add_argument("--results-dir", help="output folder (default evaluation/results)")
     arguments = parser.parse_args()
     worker(arguments) if arguments.worker else main(arguments)

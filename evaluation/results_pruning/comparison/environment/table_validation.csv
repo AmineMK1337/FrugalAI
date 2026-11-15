@@ -1,0 +1,7 @@
+model,format,threads,energy_wh_per_1000,co2e_g_per_1000,estimated_power_w,seconds_per_run,source,grid_g_per_kwh,country,energy_wh_per_1000_change_vs_fp32_pct,co2e_g_per_1000_change_vs_fp32_pct
+fp32,fused + TorchScript,1,3.310548538389481,1.867003711515978,255.1283322351155,72.47110026981682,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,0.0,0.0
+control_seed42,fused + TorchScript,1,3.308570903090338,1.8658884122232149,255.29173208287736,72.40550661203451,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-0.05973739023034108,-0.05973739023034108
+pruned10_seed42,fused + TorchScript,1,3.038301521814907,1.713468373036648,251.9526992575295,65.94432390714064,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-8.223622563377875,-8.223622563377864
+pruned20_seed42,fused + TorchScript,1,2.761797470273415,1.557532254145514,252.2611598603649,62.15156559599564,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-16.575835144922024,-16.575835144922024
+pruned30_seed42,fused + TorchScript,1,2.4765440997683177,1.3966619043289417,253.8356169291008,107.7037837151438,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-25.19233380661715,-25.19233380661714
+pruned40_seed42,fused + TorchScript,1,2.1220276675897627,1.1967302353032525,254.52191845439097,92.36755037098192,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN,-35.90102537442061,-35.90102537442059
