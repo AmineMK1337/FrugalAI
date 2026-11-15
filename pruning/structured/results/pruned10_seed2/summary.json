@@ -1,0 +1,128 @@
+{
+  "run": "pruned10_seed2",
+  "target_ratio": 0.1,
+  "seed": 2,
+  "settings": {
+    "checkpoint": "resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth",
+    "config": "configs/strong_cosine25.yaml",
+    "model": "torchvision.models.quantization.resnet18(weights=None, quantize=False, num_classes=7), strict load",
+    "pruning": "Torch-Pruning DependencyGraph + BasePruner, local (global_pruning=False), same target ratio for every prunable channel group, ignored_layers=[conv1, fc]",
+    "importance": "L1 norm of each output filter; averaged over the convs whose outputs share a channel group",
+    "fine_tuning": {
+      "epochs": 10,
+      "optimizer": "Adam",
+      "lr": 0.0001,
+      "schedule": "CosineAnnealingLR(T_max=10), stepped per epoch",
+      "batch_size": 32,
+      "augmentation": "strong",
+      "loss": "CrossEntropyLoss, balanced class weights from the train split"
+    },
+    "selection": "best validation macro F1 epoch (first maximum); epoch 10 also reported",
+    "torch": "2.12.0+cu126",
+    "torch_pruning": "1.6.1",
+    "torch_pruning_module_version": "1.6.0",
+    "gpu": "NVIDIA A40-24Q",
+    "sha256_protected": {
+      "/home/salma/FrugalAI/resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth": "1233528ddb3f0ebab9eeae6dae36acbc98292cc9aa34dadb7e553d5852077927",
+      "/home/salma/FrugalAI/resnet18_finetunning/splits/ham10000_splits.csv": "d7b17a1900f233db66a2e76d66eea333863404c53ea4fa2c154dbecd6cfe4f82",
+      "/home/salma/FrugalAI/resnet18_finetunning/configs/strong_cosine25.yaml": "da7f6b852cd0d4a6d7715ee26a768c614f7cab1b14af562546360a9f4409f73e"
+    }
+  },
+  "dependency_groups_prunable": [
+    [
+      "layer4.0.conv2",
+      "layer4.0.downsample.0",
+      "layer4.1.conv2"
+    ],
+    [
+      "layer3.0.conv2",
+      "layer3.0.downsample.0",
+      "layer3.1.conv2"
+    ],
+    [
+      "layer2.0.conv2",
+      "layer2.0.downsample.0",
+      "layer2.1.conv2"
+    ],
+    [
+      "layer1.0.conv1"
+    ],
+    [
+      "layer1.1.conv1"
+    ],
+    [
+      "layer2.0.conv1"
+    ],
+    [
+      "layer2.1.conv1"
+    ],
+    [
+      "layer3.0.conv1"
+    ],
+    [
+      "layer3.1.conv1"
+    ],
+    [
+      "layer4.0.conv1"
+    ],
+    [
+      "layer4.1.conv1"
+    ]
+  ],
+  "channel_reduction_pct_all_convs": 9.770833333333329,
+  "channel_reduction_pct_excluding_stem": 9.902871621621623,
+  "params_before": 11180103,
+  "params_after": 9047300,
+  "param_reduction_pct": 19.076774158520728,
+  "gmacs_before": 1.820915719,
+  "gmacs_after": 1.538091079,
+  "gmac_reduction_pct": 15.532000578001492,
+  "achieved_out_ratio_min_pct": 10.15625,
+  "achieved_out_ratio_max_pct": 10.9375,
+  "convs_with_unpruned_outputs": [
+    "conv1",
+    "layer1.0.conv2",
+    "layer1.1.conv2"
+  ],
+  "before_finetuning": {
+    "accuracy": 0.6971279373368147,
+    "balanced_accuracy": 0.36250875265952714,
+    "precision_macro": 0.5036813543619412,
+    "recall_macro": 0.36250875265952714,
+    "specificity_macro": 0.9215186294955103,
+    "f1_macro": 0.379584009755639,
+    "auc_macro": 0.8568996157985012,
+    "melanoma_recall": 0.4393063583815029,
+    "identical_to_fp32_pct": 70.75718015665797,
+    "val_loss": 2.6751394271850586
+  },
+  "selected_epoch": 9,
+  "selected": {
+    "accuracy": 0.8152741514360313,
+    "balanced_accuracy": 0.7255886301012555,
+    "precision_macro": 0.7140931715248288,
+    "recall_macro": 0.7255886301012555,
+    "specificity_macro": 0.9612913417644418,
+    "f1_macro": 0.7140560958033627,
+    "auc_macro": 0.9628218171780217,
+    "melanoma_recall": 0.6936416184971098,
+    "identical_to_fp32_pct": 87.79373368146214,
+    "val_loss": 1.0117188692092896
+  },
+  "epoch10": {
+    "accuracy": 0.806135770234987,
+    "balanced_accuracy": 0.7268554952822545,
+    "precision_macro": 0.6926531415273247,
+    "recall_macro": 0.7268554952822545,
+    "specificity_macro": 0.9623022234052281,
+    "f1_macro": 0.7022325873630034,
+    "auc_macro": 0.9591787998787805,
+    "melanoma_recall": 0.7052023121387283,
+    "identical_to_fp32_pct": 87.27154046997389,
+    "val_loss": 1.0724568367004395
+  },
+  "files": {
+    "selected": "pruning/structured/models/pruned10_seed2_selected.pt",
+    "epoch10": "pruning/structured/models/pruned10_seed2_epoch10.pt"
+  }
+}

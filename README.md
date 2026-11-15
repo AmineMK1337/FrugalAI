@@ -179,7 +179,7 @@ From 32 down to 16 bits nothing changes: the predictions are 100% identical to F
    - the classifier `fc`, which keeps its 7 outputs (its inputs follow layer4).
 
    The achieved ratio is recorded per layer (rounding): 10.2–10.9%, 20.1–20.3%, 30.1–31.2% and 40.0–40.6% in the pruned groups.
-5. **Fine-tune**, with the same setup as the FP32 training: class-weighted cross-entropy (weights from the train split), strong augmentation, Adam, batch 32, lr 1e-4 with cosine decay over 10 epochs, seed 42. The model is evaluated on validation right after pruning and after every epoch.
+5. **Fine-tune**, with the same setup as the FP32 training: class-weighted cross-entropy (weights from the train split), strong augmentation, Adam, batch 32, lr 1e-4 with cosine decay over 10 epochs, seed 42 (the best ratio, 10%, and the control are repeated with seeds 1 and 2). The model is evaluated on validation right after pruning and after every epoch.
 6. **Select and save** the epoch with the best validation macro F1 (epoch 10 is also reported), as the whole model (`torch.save`) and as TorchScript.
 7. **Evaluate** with the shared protocol (section 5), in [evaluation/results_pruning/](evaluation/results_pruning/).
 
@@ -187,31 +187,48 @@ From 32 down to 16 bits nothing changes: the predictions are 100% identical to F
 
 Settings: [settings.json](pruning/structured/results/settings.json), with a copy in each run's `summary.json`. Per-layer channels before/after: `pruning/structured/results/<run>/layers.csv`.
 
-### Results (validation set, seed 42)
+### Results (validation set)
 
-Performance and efficiency from evaluate.py (CPU, fused + TorchScript, latency at 1 thread). Change vs FP32: paired bootstrap, 95% CI.
+All models were evaluated in one session by evaluate.py (CPU, fused + TorchScript; latency at 1 thread), FP32 included as the timing reference: [evaluation/results_pruning/](evaluation/results_pruning/). Change vs FP32: paired bootstrap, 95% CI. Energy is an estimate, about run time × an assumed power. Between models with the same architecture (FP32 and the three controls) it varies by up to ±5%, so only larger differences are meaningful.
 
-| Model | Params | GMACs | Macro F1 right after pruning | Macro F1 after fine-tuning | Change vs FP32 (95% CI) | Pruned − control | Melanoma recall | Latency (ms) | Size (MB) | Energy vs FP32 (estimate) |
+| Model | Params | GMACs | Macro F1 right after pruning | Macro F1 after fine-tuning | Change vs FP32 (95% CI) | Melanoma recall | Latency (ms), 1 / 4 threads | Size (MB) | Peak RAM vs FP32 | Energy vs FP32 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| FP32 baseline | 11.18 M | 1.82 | – | 71.04 | – | – | 66.47 | 50.44 | 44.8 | – |
-| FP32 control (fine-tuned, not pruned) | 11.18 M | 1.82 | – | 72.65 | +1.60 (−1.62 to +4.86) | – | 71.10 | 50.44 | 44.8 | 0% |
-| Pruned 10% | 9.05 M (−19%) | 1.54 (−16%) | 37.96 | 70.34 | −0.70 (−4.40 to +2.88) | −2.31 | 75.72 | 47.61 (1.06×) | 36.3 | −8% |
-| Pruned 20% | 7.17 M (−36%) | 1.29 (−29%) | 16.74 | 67.25 | −3.79 (−7.64 to +0.23) | −5.40 | 72.25 | 42.44 (1.19×) | 28.8 | −17% |
-| Pruned 30% | 5.52 M (−51%) | 1.06 (−42%) | 11.44 | 63.25 | −7.80 (−12.00 to −3.58) | −9.40 | 73.41 | 36.30 (1.39×) | 22.2 | −25% |
-| Pruned 40% | 4.07 M (−64%) | 0.85 (−53%) | 11.41 | 60.66 | −10.39 (−14.25 to −6.64) | −11.99 | 61.85 | 31.56 (1.60×) | 16.4 | −36% |
+| FP32 baseline | 11.18 M | 1.82 | – | 71.04 | – | 66.47 | 50.94 / 14.55 | 44.8 | – | – |
+| FP32 control, seed 42 | 11.18 M | 1.82 | – | 72.65 | +1.60 (−1.62 to +4.86) | 71.10 | 50.75 / 14.67 | 44.8 | −1% | −2% |
+| FP32 control, seed 1 | 11.18 M | 1.82 | – | 73.19 | +2.15 (−1.39 to +5.64) | 69.94 | 50.82 / 14.66 | 44.8 | +1% | −5% |
+| FP32 control, seed 2 | 11.18 M | 1.82 | – | 70.98 | −0.07 (−3.33 to +3.43) | 70.52 | 50.86 / 14.69 | 44.8 | −1% | 0% |
+| Pruned 10%, seed 42 | 9.05 M (−19%) | 1.54 (−16%) | 37.96 | 70.34 | −0.70 (−4.40 to +2.88) | 75.72 | 47.82 / 14.04 (1.07×) | 36.3 | −10% | −5% |
+| Pruned 10%, seed 1 | 9.05 M | 1.54 | 37.96 | 69.42 | −1.63 (−6.03 to +2.47) | 71.10 | 47.20 / 14.06 (1.08×) | 36.3 | −12% | −7% |
+| Pruned 10%, seed 2 | 9.05 M | 1.54 | 37.96 | 71.41 | +0.36 (−3.32 to +3.86) | 69.36 | 47.64 / 14.01 (1.07×) | 36.3 | −12% | −6% |
+| Pruned 20%, seed 42 | 7.17 M (−36%) | 1.29 (−29%) | 16.74 | 67.25 | −3.79 (−7.64 to +0.23) | 72.25 | 43.17 / 13.26 (1.18×) | 28.8 | −20% | −15% |
+| Pruned 30%, seed 42 | 5.52 M (−51%) | 1.06 (−42%) | 11.44 | 63.25 | −7.80 (−12.00 to −3.58) | 73.41 | 36.80 / 11.66 (1.38×) | 22.2 | −28% | −31% |
+| Pruned 40%, seed 42 | 4.07 M (−64%) | 0.85 (−53%) | 11.41 | 60.66 | −10.39 (−14.25 to −6.64) | 61.85 | 31.92 / 10.43 (1.60×) | 16.4 | −35% | −37% |
 
-Macro F1 right after pruning comes from prune.py. The CPU evaluation and the GPU validation in prune.py differ by at most one prediction (control and 40%). Consolidated table, pruned − control by seed and plots: [pruning/structured/results/report/](pruning/structured/results/report/).
+"Right after pruning" comes from prune.py: pruning is deterministic, so it is the same for every seed. The CPU evaluation and prune.py's GPU validation differ by at most one prediction per model. Consolidated table, pruned − control by seed and plots: [pruning/structured/results/report/](pruning/structured/results/report/).
+
+**Best ratio on validation (10%), 3 seeds** (seeds only change the fine-tuning: image order and augmentation):
+
+| | FP32 | FP32 control, mean (min–max) | Pruned 10%, mean (min–max) | Pruned − control, by seed 42 / 1 / 2 (mean) |
+|---|---|---|---|---|
+| Macro F1 | 71.04 | 72.27 (70.98–73.19) | 70.39 (69.42–71.41) | −2.31 / −3.78 / +0.43 (−1.89) |
+| Balanced accuracy | 71.50 | 73.03 (71.85–74.26) | 70.94 (69.08–72.56) | −1.80 / −5.18 / +0.71 (−2.09) |
+| Melanoma recall | 66.47 | 70.52 (69.94–71.10) | 72.06 (69.36–75.72) | +4.62 / +1.16 / −1.16 (+1.54) |
+| Accuracy | 82.18 | 82.35 (81.79–82.70) | 82.11 (81.53–82.90) | −0.78 / +0.33 / −0.26 (−0.24) |
+
+Pruned − control above uses each model's selected epoch (CPU evaluation). At epoch 10 for both models, macro F1 pruned − control is −1.79 / −4.91 / +0.94 (mean −1.92; prune.py validation, [pruned_minus_control.csv](pruning/structured/results/report/pruned_minus_control.csv)).
 
 - **Fine-tuning is essential.** Right after pruning, every model is broken: macro F1 11–38, and at 30–40% the model predicts "nv" for almost every image. Ten epochs recover most of the loss.
-- **The loss grows with the ratio, and comes from pruning.** At 10% macro F1 stays within noise of FP32 (−0.7 points). From 30% the drop is significant (−7.8 and −10.4 points). The control, fine-tuned the same way without pruning, gains +1.6 points, so the gap to the control is larger than the gap to FP32 (−2.3 to −12.0 points).
-- **Speed-up is smaller than the compute cut.** GMACs fall by 16–53%, but latency only by 6–37% at 1 thread (1.06–1.60×) and 3–29% at 4 threads (1.03–1.40×). layer1, which runs at the highest resolution, is only half prunable (its residual stream is protected), and a ResNet-18 on this CPU is not limited by arithmetic alone. Peak RAM falls by 10–36%. Energy, estimated from run time, falls by 8–36%.
-- **Three of the four pruned models were still improving at epoch 10** (best epoch = 10 for 10%, 20% and 30%), so a longer fine-tuning could narrow the gap.
-- **Melanoma recall** goes up at 10–30%, but macro F1 goes down at the same time. The pruned models shift errors between classes rather than improving, and this is one seed on validation.
-- **Compared with INT8 QAT** (section 7, a different evaluation session): QAT is 7.5× faster and 4× smaller with no loss of macro F1. Pruning at 40% gives 1.6× and 2.7× with −10 points. For this model on this CPU, quantization is the far better trade-off. The two can also be combined: the pruned models keep the quantizable architecture.
+- **10% is nearly free compared with the original model.** On 3 seeds, macro F1 is 70.39 on average vs 71.04 for FP32 (−0.65), and no seed's difference is significant. The seed-to-seed spread is about 2 points, both for the pruned model and for the control, so one training run cannot resolve differences of this size.
+- **Compared with the control, 10% probably costs about 2 points, but this is not established.** Pruned − control is −1.9 macro F1 on average, but the sign changes with the seed (−2.3, −3.8, +0.4).
+- **From 20% the loss grows clearly with the ratio** (single seed, but much larger than the seed spread): −3.8, −7.8 and −10.4 points vs FP32 at 20, 30 and 40%, significant from 30%.
+- **Speed-up is smaller than the compute cut.** GMACs fall by 16–53%, but latency only by 6–37% at 1 thread (1.07–1.60×) and 3–28% at 4 threads (1.04–1.40×). layer1, which runs at the highest resolution, is only half prunable (its residual stream is protected), and a ResNet-18 on this CPU is not limited by arithmetic alone. Peak RAM falls by 10–35%, and estimated energy by 5–37%.
+- **Most pruned models were still improving at their last epochs** (best epoch 9 or 10 for 10–30%), so a longer fine-tuning could narrow the gap.
+- **Melanoma recall** rises at 10% (+5.6 points vs FP32 on average), but the control rises too (+4.1), so most of it comes from the extra fine-tuning, not from pruning (pruned − control +1.5, with the sign changing by seed). Macro F1 falls at the same time, and the per-seed values vary by 6 points.
+- **Compared with INT8 QAT** (section 7, a different evaluation session): QAT is 7.5× faster and 4× smaller with no loss of macro F1. Pruning gives 1.07× at 10% and 1.6× (2.7× smaller) at 40% with −10 points. For this model on this CPU, quantization is the far better trade-off. The two can also be combined: the pruned models keep the quantizable architecture.
 
 ## Next steps
 
-- Pruning step 4: repeat the best ratio on validation and the FP32 control with seeds 1 and 2.
+- Optional: quantize the pruned models (INT8 QAT or static PTQ) to combine both techniques; longer fine-tuning after pruning.
 - Once every model is final, evaluate all of them once on the held-out test set (`python evaluation/evaluate.py --split test`).
 
 ## Reproduce

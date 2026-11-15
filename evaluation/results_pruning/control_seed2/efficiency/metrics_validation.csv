@@ -1,0 +1,2 @@
+model,format,size_mb,gflops,params,latency_median_ms_1t,latency_p95_ms_1t,throughput_img_s_1t,peak_memory_mb_1t,latency_median_ms_4t,latency_p95_ms_4t,throughput_img_s_4t,peak_memory_mb_4t,note
+control_seed2,fused + TorchScript,44.816779,3.644641294,11180103,50.85812043398619,51.37982781743631,20.780324766524842,76.6328125,14.694686979055405,15.021609561517835,78.46344366262048,77.0,"FP32 control: unpruned, fine-tuned with the pruning schedule, best validation macro F1 epoch"

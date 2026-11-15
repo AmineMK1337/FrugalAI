@@ -22,7 +22,11 @@
   "models": [
     "fp32",
     "control_seed42",
+    "control_seed1",
+    "control_seed2",
     "pruned10_seed42",
+    "pruned10_seed1",
+    "pruned10_seed2",
     "pruned20_seed42",
     "pruned30_seed42",
     "pruned40_seed42"
@@ -43,11 +47,39 @@
       "max_abs_probability_difference": 4.470348358154297e-06
     },
     {
+      "model": "control_seed1",
+      "n_images": 1532,
+      "identical_predictions_pct": 100.0,
+      "max_abs_logit_difference": 2.956390380859375e-05,
+      "max_abs_probability_difference": 3.3974647521972656e-06
+    },
+    {
+      "model": "control_seed2",
+      "n_images": 1532,
+      "identical_predictions_pct": 100.0,
+      "max_abs_logit_difference": 2.5987625122070312e-05,
+      "max_abs_probability_difference": 3.337860107421875e-06
+    },
+    {
       "model": "pruned10_seed42",
       "n_images": 1532,
       "identical_predictions_pct": 100.0,
       "max_abs_logit_difference": 2.205371856689453e-05,
       "max_abs_probability_difference": 3.635883331298828e-06
+    },
+    {
+      "model": "pruned10_seed1",
+      "n_images": 1532,
+      "identical_predictions_pct": 100.0,
+      "max_abs_logit_difference": 2.899765968322754e-05,
+      "max_abs_probability_difference": 5.662441253662109e-06
+    },
+    {
+      "model": "pruned10_seed2",
+      "n_images": 1532,
+      "identical_predictions_pct": 100.0,
+      "max_abs_logit_difference": 1.9073486328125e-05,
+      "max_abs_probability_difference": 4.291534423828125e-06
     },
     {
       "model": "pruned20_seed42",
@@ -93,11 +125,15 @@
   "torch": "2.12.0+cu126",
   "python": "3.11.6",
   "country_for_co2e": "TUN",
-  "date_utc": "2026-11-15T13:15:48+00:00",
+  "date_utc": "2026-11-15T16:34:50+00:00",
   "sha256": {
     "fp32": "1233528ddb3f0ebab9eeae6dae36acbc98292cc9aa34dadb7e553d5852077927",
     "control_seed42": "7cf83a70ea5a0f2c156158c514e5b14316fc58734fb627c0ee25000f19678599",
+    "control_seed1": "66a43682c870cfb6019122b8ba7e5a1e940392bf11904a0cdce92c01e3408518",
+    "control_seed2": "086a61fd66c6958851258773ef095a8d986a2191d8ee9c065aaac49f86e46fd0",
     "pruned10_seed42": "cc9f09d0361a2a06c99a0764b0d7118a4422637a340fc5ee5da346756329feb9",
+    "pruned10_seed1": "3b7e3a66d4cd40a1b90df4e12060e8f05b6613056728615368371977570133f0",
+    "pruned10_seed2": "0d30e6e3794f079e00920a183716693e95bbc04942f371a15baabb343a48b615",
     "pruned20_seed42": "3617c14d38c4fb927cd68b358ef4885e72916e89d85652a703772c64fc69fb5e",
     "pruned30_seed42": "6e61c270b565d3b6fab8f7d52faeafdd68da84dea763ed4c8a0bf643dff13adf",
     "pruned40_seed42": "a5236e0c20185f9e3fe2a221a6378ec5c649068c20b87e714bb27584c8477858",
