@@ -1,6 +1,6 @@
 # FrugalAI
 
-Skin-lesion classification on HAM 10000 with a fine-tuned ResNet-18. This page summarizes the work so far: the data split, fine-tuning, and the evaluation of the FP32 baseline against its INT8 versions: weight-only quantization, per-channel and per-tensor ([quantization/ptq/weight_only/](quantization/ptq/weight_only/)), and quantization-aware training ([quantization/qat/](quantization/qat/)).
+Skin-lesion classification on HAM 10000 with a fine-tuned ResNet-18. This page summarizes the work so far: the data split, fine-tuning, and the evaluation of the FP32 baseline against its INT8 versions: weight-only quantization, per-channel and per-tensor ([quantization/ptq/weight_only/](quantization/ptq/weight_only/)), and quantization-aware training ([quantization/qat/](quantization/qat/)), plus structured (channel) pruning in FP32 ([pruning/structured/](pruning/structured/)).
 
 ## 1. Dataset
 
@@ -63,7 +63,7 @@ Each run's folder in [resnet18_finetunning/results/](resnet18_finetunning/result
 
 ## 5. Evaluation machine and thread protocol
 
-All four models (FP32 baseline, weight-only INT8 per-channel, weight-only INT8 per-tensor, INT8 QAT) are evaluated by [evaluation/evaluate.py](evaluation/evaluate.py) on the same validation images, on the same machine, on the CPU only, and in the same format, so the only difference between models is the precision (FP32 or INT8). The exact settings and file hashes of each run are saved in [evaluation/results/run_info.json](evaluation/results/run_info.json).
+All four models (FP32 baseline, weight-only INT8 per-channel, weight-only INT8 per-tensor, INT8 QAT) are evaluated by [evaluation/evaluate.py](evaluation/evaluate.py) on the same validation images, on the same machine, on the CPU only, and in the same format, so the only difference between models is the precision (FP32 or INT8). The exact settings and file hashes of each run are saved in [evaluation/results_quantization/run_info.json](evaluation/results_quantization/run_info.json).
 
 ### The virtual machine
 
@@ -80,7 +80,7 @@ The VM exposes no power counter: there is no RAPL for the CPU, and the virtual G
 
 ### Same format for every model: fused + TorchScript
 
-Every model runs as TorchScript with each convolution fused with its BatchNorm and ReLU. The FP32 and weight-only models are loaded into `torchvision.models.quantization.resnet18` (`quantize=False`), fused with `fuse_model()` and traced with `torch.jit.trace`; the QAT model is already fused INT8 TorchScript. Before anything is measured, each fused model is compared with its unfused version on the validation set: predictions are 100% identical and logits differ by at most 3e-5 (float rounding) ([fused_vs_unfused_check_validation.csv](evaluation/results/comparison/performance/fused_vs_unfused_check_validation.csv)). Model size is still the size of each model's original file.
+Every model runs as TorchScript with each convolution fused with its BatchNorm and ReLU. The FP32 and weight-only models are loaded into `torchvision.models.quantization.resnet18` (`quantize=False`), fused with `fuse_model()` and traced with `torch.jit.trace`; the QAT model is already fused INT8 TorchScript. Before anything is measured, each fused model is compared with its unfused version on the validation set: predictions are 100% identical and logits differ by at most 3e-5 (float rounding) ([fused_vs_unfused_check_validation.csv](evaluation/results_quantization/comparison/performance/fused_vs_unfused_check_validation.csv)). Model size is still the size of each model's original file.
 
 ### Measuring at 1 and 4 threads
 
@@ -109,7 +109,9 @@ To rerun the evaluation (validation split):
 python evaluation/evaluate.py
 ```
 
-Results and plots are written to [evaluation/results/](evaluation/results/), by model (`fp32`, `weight_only_per_channel`, `weight_only_per_tensor`, `qat`) and metric type (`performance`, `efficiency`, `environment`), with cross-model comparisons in `comparison/`. Every quantized model is compared with FP32: its plots show FP32 next to it, `performance/change_vs_fp32` shows each metric's change with a paired-bootstrap CI and p-value, and each metric folder has a `vs_fp32_<split>.csv` table. Performance metrics are accuracy, balanced accuracy (= macro recall), precision, specificity, F1, AUC (macro) and melanoma recall, each with a 95% bootstrap CI.
+Results and plots are written to `evaluation/results/` by default (the quantization results are kept in [evaluation/results_quantization/](evaluation/results_quantization/)), by model (`fp32`, `weight_only_per_channel`, `weight_only_per_tensor`, `qat`) and metric type (`performance`, `efficiency`, `environment`), with cross-model comparisons in `comparison/`. Every quantized model is compared with FP32: its plots show FP32 next to it, `performance/change_vs_fp32` shows each metric's change with a paired-bootstrap CI and p-value, and each metric folder has a `vs_fp32_<split>.csv` table. Performance metrics are accuracy, balanced accuracy (= macro recall), precision, specificity, F1, AUC (macro) and melanoma recall, each with a 95% bootstrap CI.
+
+`--models` picks which models to evaluate and `--results-dir` where to write them. The pruned models are evaluated this way in their own session, with FP32 re-measured there as the timing reference (section 8). FLOPs and parameters are counted on each model's own architecture.
 
 ## 6. Quantization-aware training (QAT)
 
@@ -129,7 +131,7 @@ Results and plots are written to [evaluation/results/](evaluation/results/), by 
 
 ## 7. Results: FP32 baseline vs quantized models (validation set, 1,532 images)
 
-From [evaluation/results/comparison/](evaluation/results/comparison/), CPU, fused + TorchScript, latency at 1 thread (main protocol).
+From [evaluation/results_quantization/comparison/](evaluation/results_quantization/comparison/), CPU, fused + TorchScript, latency at 1 thread (main protocol).
 
 | Model | Accuracy | Macro F1 | Melanoma recall | Size (MB) | Latency (ms) | Speed-up | Peak RAM vs FP32 | Energy / 1,000 images (Wh, estimate) |
 |---|---|---|---|---|---|---|---|---|
@@ -154,17 +156,62 @@ From [evaluation/results/comparison/](evaluation/results/comparison/), CPU, fuse
 | 10 | 0.33% / 0.89% | 71.49 | 71.20 | 99.67 / 98.89 |
 | 9 | 0.66% / 1.79% | 71.60 | 71.38 | 98.69 / 98.50 |
 | 8 | 1.3% / 3.6% | 71.03 | 70.22 | 97.72 / 96.54 |
-| 7 | 2.7% / 7.2% | 70.64 | 69.66 |
-| 6 | 5.4% / 14.7% | 65.67 | 66.15 |
-| 5 | 11.2% / 30.3% | 57.45 | 48.39 |
-| 4 | 23.8% / 60.7% | 36.69 | 11.24 |
-| 3 | 51.3% / 89.3% | 14.42 | 11.41 |
-| 2 | 91.6% / 99.1% | 11.41 | 11.41 |
+| 7 | 2.7% / 7.2% | 70.64 | 69.66 | 95.30 / 91.91 |
+| 6 | 5.4% / 14.7% | 65.67 | 66.15 | 89.10 / 89.36 |
+| 5 | 11.2% / 30.3% | 57.45 | 48.39 | 84.60 / 73.17 |
+| 4 | 23.8% / 60.7% | 36.69 | 11.24 | 63.84 / 51.11 |
+| 3 | 51.3% / 89.3% | 14.42 | 11.41 | 45.23 / 62.34 |
+| 2 | 91.6% / 99.1% | 11.41 | 11.41 | 62.34 / 62.34 |
 
 From 32 down to 16 bits nothing changes: the predictions are 100% identical to FP32, because an FP32 weight carries only 24 bits of precision, and at 16 bits the rounding error is at most 0.014%. Between 15 and 9 bits a few images (at most 1.5%) change class, in both directions, and every metric stays at the FP32 level. Each bit removed doubles the weight error. At 8 and 7 bits the error (1–7%) stays within what the network tolerates, and macro F1 stays within the FP32 confidence interval. From 6 bits down, performance degrades, and it collapses at 4 bits: per-channel macro F1 falls to 37, and per-tensor ends up predicting "nv" for every image. That gives 66.45% accuracy (the share of nv in the validation set) but macro F1 11.4 and melanoma recall 0. Accuracy alone hides this collapse, which is why macro F1 and melanoma recall are the main metrics. Per-channel scales hold up about one bit longer than per-tensor scales.
 
+## 8. Structured pruning (FP32)
+
+[pruning/structured/prune.py](pruning/structured/prune.py) removes whole filters (output channels) from the convolutions, so the layers become physically smaller. Weights stay FP32; there is no quantization and no unstructured pruning. Data roles: train split = fine-tuning; validation split = choosing ratios and epochs; the test set is not used.
+
+**How a pruned model is made** (diagram and measured macro F1 at each stage: [pruning_process.png](pruning/structured/results/report/pruning_process.png)):
+
+1. **Start from the FP32 baseline**, loaded (`strict=True`) into `torchvision.models.quantization.resnet18(quantize=False)`, so the pruned models can be fused now and quantized later.
+2. **Dependency groups.** [Torch-Pruning](https://github.com/VainF/Torch-Pruning) 1.6.1 builds the dependency graph. Convolutions whose outputs are added by a residual connection (the second conv of each block and the downsample conv) share their channel indices and are pruned together, so the additions stay consistent.
+3. **Rank the filters: L1 filter norm.** Each output filter's importance is the L1 norm of its weights, the criterion of classic L1 filter pruning (Li et al., 2017, *Pruning Filters for Efficient ConvNets*). When several convolutions share a channel group (residual stream), the filter norms of those convolutions are averaged per channel. BatchNorm weights and the input weights of the next layers are not used.
+4. **Remove the lowest-ranked filters.** Local pruning: the same target ratio (10, 20, 30 or 40%) in every prunable group. Two layers are excluded:
+   - the stem `conv1`, which protects its whole channel group: the layer1 residual stream (outputs of `layer1.*.conv2`). In layer1, only the inner `conv1` of each block is pruned;
+   - the classifier `fc`, which keeps its 7 outputs (its inputs follow layer4).
+
+   The achieved ratio is recorded per layer (rounding): 10.2–10.9%, 20.1–20.3%, 30.1–31.2% and 40.0–40.6% in the pruned groups.
+5. **Fine-tune**, with the same setup as the FP32 training: class-weighted cross-entropy (weights from the train split), strong augmentation, Adam, batch 32, lr 1e-4 with cosine decay over 10 epochs, seed 42. The model is evaluated on validation right after pruning and after every epoch.
+6. **Select and save** the epoch with the best validation macro F1 (epoch 10 is also reported), as the whole model (`torch.save`) and as TorchScript.
+7. **Evaluate** with the shared protocol (section 5), in [evaluation/results_pruning/](evaluation/results_pruning/).
+
+**FP32 control.** The unpruned model fine-tuned with exactly the same settings. Comparing pruned models with it separates the effect of pruning from the effect of the extra fine-tuning.
+
+Settings: [settings.json](pruning/structured/results/settings.json), with a copy in each run's `summary.json`. Per-layer channels before/after: `pruning/structured/results/<run>/layers.csv`.
+
+### Results (validation set, seed 42)
+
+Performance and efficiency from evaluate.py (CPU, fused + TorchScript, latency at 1 thread). Change vs FP32: paired bootstrap, 95% CI.
+
+| Model | Params | GMACs | Macro F1 right after pruning | Macro F1 after fine-tuning | Change vs FP32 (95% CI) | Pruned − control | Melanoma recall | Latency (ms) | Size (MB) | Energy vs FP32 (estimate) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| FP32 baseline | 11.18 M | 1.82 | – | 71.04 | – | – | 66.47 | 50.44 | 44.8 | – |
+| FP32 control (fine-tuned, not pruned) | 11.18 M | 1.82 | – | 72.65 | +1.60 (−1.62 to +4.86) | – | 71.10 | 50.44 | 44.8 | 0% |
+| Pruned 10% | 9.05 M (−19%) | 1.54 (−16%) | 37.96 | 70.34 | −0.70 (−4.40 to +2.88) | −2.31 | 75.72 | 47.61 (1.06×) | 36.3 | −8% |
+| Pruned 20% | 7.17 M (−36%) | 1.29 (−29%) | 16.74 | 67.25 | −3.79 (−7.64 to +0.23) | −5.40 | 72.25 | 42.44 (1.19×) | 28.8 | −17% |
+| Pruned 30% | 5.52 M (−51%) | 1.06 (−42%) | 11.44 | 63.25 | −7.80 (−12.00 to −3.58) | −9.40 | 73.41 | 36.30 (1.39×) | 22.2 | −25% |
+| Pruned 40% | 4.07 M (−64%) | 0.85 (−53%) | 11.41 | 60.66 | −10.39 (−14.25 to −6.64) | −11.99 | 61.85 | 31.56 (1.60×) | 16.4 | −36% |
+
+Macro F1 right after pruning comes from prune.py. The CPU evaluation and the GPU validation in prune.py differ by at most one prediction (control and 40%). Consolidated table, pruned − control by seed and plots: [pruning/structured/results/report/](pruning/structured/results/report/).
+
+- **Fine-tuning is essential.** Right after pruning, every model is broken: macro F1 11–38, and at 30–40% the model predicts "nv" for almost every image. Ten epochs recover most of the loss.
+- **The loss grows with the ratio, and comes from pruning.** At 10% macro F1 stays within noise of FP32 (−0.7 points). From 30% the drop is significant (−7.8 and −10.4 points). The control, fine-tuned the same way without pruning, gains +1.6 points, so the gap to the control is larger than the gap to FP32 (−2.3 to −12.0 points).
+- **Speed-up is smaller than the compute cut.** GMACs fall by 16–53%, but latency only by 6–37% at 1 thread (1.06–1.60×) and 3–29% at 4 threads (1.03–1.40×). layer1, which runs at the highest resolution, is only half prunable (its residual stream is protected), and a ResNet-18 on this CPU is not limited by arithmetic alone. Peak RAM falls by 10–36%. Energy, estimated from run time, falls by 8–36%.
+- **Three of the four pruned models were still improving at epoch 10** (best epoch = 10 for 10%, 20% and 30%), so a longer fine-tuning could narrow the gap.
+- **Melanoma recall** goes up at 10–30%, but macro F1 goes down at the same time. The pruned models shift errors between classes rather than improving, and this is one seed on validation.
+- **Compared with INT8 QAT** (section 7, a different evaluation session): QAT is 7.5× faster and 4× smaller with no loss of macro F1. Pruning at 40% gives 1.6× and 2.7× with −10 points. For this model on this CPU, quantization is the far better trade-off. The two can also be combined: the pruned models keep the quantizable architecture.
+
 ## Next steps
 
+- Pruning step 4: repeat the best ratio on validation and the FP32 control with seeds 1 and 2.
 - Once every model is final, evaluate all of them once on the held-out test set (`python evaluation/evaluate.py --split test`).
 
 ## Reproduce
