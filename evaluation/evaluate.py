@@ -22,6 +22,12 @@ counted on each model's own architecture. They are evaluated in a separate sessi
 there as the timing reference:
   python evaluation/evaluate.py --models fp32 pruned20_seed42 ... --results-dir evaluation/results_pruning
 
+Unstructured pruning (pruning/unstructured/): sparse<pct>_seed<s> are whole saved modules with exact zeros
+(pruning/unstructured/models/<run>_selected.pt), fused and traced the same way; dense CPU kernels still multiply the
+zeros. Storage columns for every model with FP32 weights: zeros and sparsity of the Conv2d/Linear weights, non-zero
+parameters, and the torch.save(state_dict) size dense and gzip-compressed (level 9):
+  python evaluation/evaluate.py --models fp32 sparse50_seed42 ... --results-dir pruning/unstructured/results/evaluation
+
 Usage: python evaluation/evaluate.py [--split validation|test] [--repeats 3] [--country TUN] [--models ...]
        [--results-dir DIR]
 Writes evaluation/results/<model>/<metric_type>/, evaluation/results/comparison/<metric_type>/ and
@@ -58,6 +64,7 @@ PROJECT = ROOT / "resnet18_finetunning"
 WEIGHT_ONLY = ROOT / "quantization" / "ptq" / "weight_only"
 QAT = ROOT / "quantization" / "qat"
 PRUNING = ROOT / "pruning" / "structured"
+UNSTRUCTURED = ROOT / "pruning" / "unstructured"
 RESULTS = HERE / "results"
 sys.path[:0] = [str(PROJECT / "src"), str(WEIGHT_ONLY)]
 LAUNCH_DIR = Path.cwd()  # relative --results-dir is taken from where the script is launched
@@ -143,6 +150,12 @@ for _path in sorted((PRUNING / "models").glob("*_selected.pt")):  # pruned<ratio
         note=("FP32 control: unpruned, fine-tuned with the pruning schedule" if _name.startswith("control")
               else f"FP32, structured pruning (target {_name[6:].split('_')[0]}% channels)")
         + ", best validation macro F1 epoch")
+for _path in sorted((UNSTRUCTURED / "models").glob("sparse*_selected.pt")):  # sparse<pct>_seed<s>
+    _name = _path.name[:-len("_selected.pt")]
+    MODELS[_name] = dict(
+        state=None, module=saved_module(_path), unfused=saved_module(_path), file=_path,
+        note=f"FP32, unstructured pruning (target {_name[6:].split('_')[0]}% of conv/linear weights set to zero), "
+             "best validation macro F1 epoch")
 
 def export_torchscript(workdir):
     """Path of each model's fused TorchScript file. QAT already is one; the others are traced here."""
@@ -251,9 +264,9 @@ def check_against_earlier_results(overall):
     """Fusing changes only rounding, so performance must equal the results saved when the models were made
     (exactly for prediction-based metrics; AUC, which uses probabilities, up to 1e-4)."""
     tolerance = {m: 1e-9 for m in PERFORMANCE} | {"auc_macro": 1e-4}
-    for name in (n for n in MODELS if n.startswith(("pruned", "control"))):
+    for name in (n for n in MODELS if n.startswith(("pruned", "control", "sparse"))):
         # saved by prune.py from GPU logits: a prediction near a tie may flip on the CPU, so allow 2 images
-        saved = pd.read_csv(PRUNING / "results" / name / "metrics.csv")
+        saved = pd.read_csv((UNSTRUCTURED if name.startswith("sparse") else PRUNING) / "results" / name / "metrics.csv")
         saved = saved[saved["stage"].str.startswith("selected")].iloc[0]
         diff = abs(overall[name]["accuracy"] - saved["accuracy"]) * overall[name]["n_images"]
         print(f"{name}: accuracy differs from the prune.py validation result by {diff:.0f} image(s)", flush=True)
@@ -374,6 +387,31 @@ def flops_and_params(name):
     return 2 * macs / 1e9, params
 
 
+def storage(name):
+    """Zeros and sparsity of the Conv2d/Linear weights, non-zero parameters, and the torch.save(state_dict) size,
+    dense and gzip-compressed (level 9). Models with FP32 weights only (QAT: not applicable, NaN)."""
+    import gzip
+    import io
+    spec = MODELS[name]
+    if "module" in spec:
+        model = spec["module"]()
+    elif spec["state"] is not None:
+        model = quantizable_resnet18(weights=None, quantize=False, num_classes=NUM_CLASSES)
+        model.load_state_dict(spec["state"](), strict=True)
+    else:
+        return {k: float("nan") for k in ("weights_prunable", "weights_zero", "sparsity_pct", "params_nonzero",
+                                          "state_dict_dense_mb", "state_dict_gzip_mb")}
+    weights = [m.weight for m in model.modules() if isinstance(m, (torch.nn.Conv2d, torch.nn.Linear))]
+    zeros = sum(int((w == 0).sum()) for w in weights)
+    total = sum(w.numel() for w in weights)
+    buffer = io.BytesIO()
+    torch.save(model.state_dict(), buffer)
+    raw = buffer.getvalue()
+    return {"weights_prunable": total, "weights_zero": zeros, "sparsity_pct": zeros / total * 100,
+            "params_nonzero": sum(int((p != 0).sum()) for p in model.parameters()),
+            "state_dict_dense_mb": len(raw) / 1e6, "state_dict_gzip_mb": len(gzip.compress(raw, 9)) / 1e6}
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def save_csv(table, folder, name, split):
@@ -470,7 +508,7 @@ def main(args):
     for name in MODELS:
         gflops, params = flops_and_params(name)
         efficiency = {"model": name, "format": FORMAT, "size_mb": MODELS[name]["file"].stat().st_size / 1e6,
-                      "gflops": gflops, "params": params}
+                      "gflops": gflops, "params": params, **storage(name)}
         for t in THREADS:
             m = medians.loc[(name, t)]
             efficiency.update({f"latency_median_ms_{t}t": m["latency_median_ms"],
@@ -505,7 +543,9 @@ def main(args):
             "weight_only_per_channel": "dequantized to FP32, then as fp32",
             "weight_only_per_tensor": "dequantized to FP32, then as fp32",
             "qat": "saved fused INT8 TorchScript (torch.jit.script), loaded as is",
-            "pruned / control": "whole saved FP32 module (pruning/structured/models), fuse_model(), torch.jit.trace"},
+            "pruned / control": "whole saved FP32 module (pruning/structured/models), fuse_model(), torch.jit.trace",
+            "sparse": "whole saved FP32 module with exact zeros (pruning/unstructured/models), fuse_model(), "
+                      "torch.jit.trace; dense kernels"},
         "models": list(MODELS),
         "fused_vs_unfused_check": fused_check.to_dict(orient="records"),
         "cpu": subprocess.run("lscpu | grep 'Model name'", shell=True, capture_output=True,

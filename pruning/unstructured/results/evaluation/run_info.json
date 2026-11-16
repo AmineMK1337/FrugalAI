@@ -1,0 +1,99 @@
+{
+  "split": "validation",
+  "n_images": 1532,
+  "classes": [
+    "akiec",
+    "bcc",
+    "bkl",
+    "df",
+    "mel",
+    "nv",
+    "vasc"
+  ],
+  "device": "cpu",
+  "format": "fused + TorchScript",
+  "format_details": {
+    "fp32": "weights in torchvision.models.quantization.resnet18 (quantize=False), fuse_model(), torch.jit.trace",
+    "weight_only_per_channel": "dequantized to FP32, then as fp32",
+    "weight_only_per_tensor": "dequantized to FP32, then as fp32",
+    "qat": "saved fused INT8 TorchScript (torch.jit.script), loaded as is",
+    "pruned / control": "whole saved FP32 module (pruning/structured/models), fuse_model(), torch.jit.trace",
+    "sparse": "whole saved FP32 module with exact zeros (pruning/unstructured/models), fuse_model(), torch.jit.trace; dense kernels"
+  },
+  "models": [
+    "fp32",
+    "sparse30_seed42",
+    "sparse50_seed42",
+    "sparse70_seed42",
+    "sparse90_seed42"
+  ],
+  "fused_vs_unfused_check": [
+    {
+      "model": "fp32",
+      "n_images": 1532,
+      "identical_predictions_pct": 100.0,
+      "max_abs_logit_difference": 2.47955322265625e-05,
+      "max_abs_probability_difference": 5.245208740234375e-06
+    },
+    {
+      "model": "sparse30_seed42",
+      "n_images": 1532,
+      "identical_predictions_pct": 100.0,
+      "max_abs_logit_difference": 1.621246337890625e-05,
+      "max_abs_probability_difference": 3.814697265625e-06
+    },
+    {
+      "model": "sparse50_seed42",
+      "n_images": 1532,
+      "identical_predictions_pct": 100.0,
+      "max_abs_logit_difference": 3.0517578125e-05,
+      "max_abs_probability_difference": 2.5033950805664062e-06
+    },
+    {
+      "model": "sparse70_seed42",
+      "n_images": 1532,
+      "identical_predictions_pct": 100.0,
+      "max_abs_logit_difference": 1.811981201171875e-05,
+      "max_abs_probability_difference": 4.112720489501953e-06
+    },
+    {
+      "model": "sparse90_seed42",
+      "n_images": 1532,
+      "identical_predictions_pct": 100.0,
+      "max_abs_logit_difference": 1.0371208190917969e-05,
+      "max_abs_probability_difference": 2.4437904357910156e-06
+    }
+  ],
+  "cpu": "Intel(R) Xeon(R) Gold 6348 CPU @ 2.60GHz",
+  "logical_cpus": 32,
+  "threads": [
+    1,
+    4
+  ],
+  "threads_main": 1,
+  "interop_threads": 1,
+  "repeats": 3,
+  "warmup_runs": 30,
+  "latency_runs": 200,
+  "throughput_batch_size": 32,
+  "peak_memory": "psutil RSS, sampled every 1 ms during load + warm-up",
+  "energy_threads": 1,
+  "energy_min_seconds": 60,
+  "bootstrap_resamples": 1000,
+  "bootstrap_seed": 0,
+  "quantized_engine": "x86",
+  "flops_counted_on": "fused FP32 architecture, for every model",
+  "torch": "2.12.0+cu126",
+  "python": "3.11.6",
+  "country_for_co2e": "TUN",
+  "date_utc": "2026-11-16T13:26:24+00:00",
+  "sha256": {
+    "fp32": "1233528ddb3f0ebab9eeae6dae36acbc98292cc9aa34dadb7e553d5852077927",
+    "sparse30_seed42": "5b2b5fe939ca317186208a287d9b4c1e4b3814dca05573a596b6b919b0727102",
+    "sparse50_seed42": "ed6d1f0c399978f0907aefc3ecc2b5060d5bb256eedb88e80d1ee8f53be2d61e",
+    "sparse70_seed42": "daa8b82437f1ce266c27474b4c6155c6e7b1f21dedd37719f1aafa904266145e",
+    "sparse90_seed42": "04568d6a5a8d53eb11aed40bbe6fd507c1c5f7a43ec4ecee10382e0b5c2226c6",
+    "split_csv": "d7b17a1900f233db66a2e76d66eea333863404c53ea4fa2c154dbecd6cfe4f82",
+    "config": "da7f6b852cd0d4a6d7715ee26a768c614f7cab1b14af562546360a9f4409f73e"
+  }
+}

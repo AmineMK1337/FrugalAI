@@ -31,6 +31,8 @@ STYLE = {  # the same look for a model in every plot
 }
 MODELS = list(STYLE)
 PRUNED_COLORS = {10: "#f2c4a8", 20: "#e08a5c", 30: "#c25420", 40: "#7a2e0c"}  # light to dark = more pruning
+SPARSE_COLORS = {30: "#cfe3bf", 50: "#93bf73", 70: "#5b8a3a", 90: "#2f4f1c"}  # unstructured
+SPARSE_HATCHES = {30: "..", 50: "oo", 70: "\\\\", 90: "++"}
 PRUNED_HATCHES = {10: "..", 20: "//", 30: "xx", 40: "\\\\"}
 
 
@@ -46,6 +48,10 @@ def add_style(model):
         ratio = int(model[len("pruned"):].split("_")[0])
         STYLE[model] = dict(label=f"Pruned {ratio}% (seed {seed})", short=f"Pruned\n{ratio}% s{seed}",
                             color=PRUNED_COLORS.get(ratio, "#c25420"), hatch=PRUNED_HATCHES.get(ratio, "//"))
+    elif model.startswith("sparse"):
+        pct = int(model[len("sparse"):].split("_")[0])
+        STYLE[model] = dict(label=f"Unstructured {pct}% (seed {seed})", short=f"Sparse\n{pct}% s{seed}",
+                            color=SPARSE_COLORS.get(pct, "#5b8a3a"), hatch=SPARSE_HATCHES.get(pct, ".."))
     else:
         raise KeyError(f"no plot style for {model}")
 THREADS = (1, 4)

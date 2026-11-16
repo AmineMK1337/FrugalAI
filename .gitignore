@@ -35,3 +35,4 @@ skin-lesion-classification/data/
 wandb/
 emissions.csv
 *.log
+pruning/unstructured/models/
