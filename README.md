@@ -1,6 +1,6 @@
 # FrugalAI
 
-Skin-lesion classification on HAM 10000 with a fine-tuned ResNet-18. This page summarizes the work so far: the data split, fine-tuning, and the evaluation of the FP32 baseline against its INT8 versions: weight-only quantization, per-channel and per-tensor ([quantization/ptq/weight_only/](quantization/ptq/weight_only/)), and quantization-aware training ([quantization/qat/](quantization/qat/)), plus structured (channel) pruning in FP32 ([pruning/structured/](pruning/structured/)).
+Skin-lesion classification on HAM 10000 with a fine-tuned ResNet-18. This page summarizes the work so far: the data split, fine-tuning, and the evaluation of the FP32 baseline against its INT8 versions: weight-only quantization, per-channel and per-tensor ([quantization/ptq/weight_only/](quantization/ptq/weight_only/)), and quantization-aware training ([quantization/qat/](quantization/qat/)), plus structured (channel) pruning ([pruning/structured/](pruning/structured/)) and unstructured (weight) pruning ([pruning/unstructured/](pruning/unstructured/)), both in FP32.
 
 ## 1. Dataset
 
@@ -226,9 +226,59 @@ Pruned − control above uses each model's selected epoch (CPU evaluation). At e
 - **Melanoma recall** rises at 10% (+5.6 points vs FP32 on average), but the control rises too (+4.1), so most of it comes from the extra fine-tuning, not from pruning (pruned − control +1.5, with the sign changing by seed). Macro F1 falls at the same time, and the per-seed values vary by 6 points.
 - **Compared with INT8 QAT** (section 7, a different evaluation session): QAT is 7.5× faster and 4× smaller with no loss of macro F1. Pruning gives 1.07× at 10% and 1.6× (2.7× smaller) at 40% with −10 points. For this model on this CPU, quantization is the far better trade-off. The two can also be combined: the pruned models keep the quantizable architecture.
 
+## 9. Unstructured pruning (FP32)
+
+[pruning/unstructured/prune_unstructured.py](pruning/unstructured/prune_unstructured.py) sets individual weights to zero instead of removing whole filters. The layers keep their shape: only the number of non-zero weights changes. Weights stay FP32, with no quantization and no structured pruning. Data roles are the same as in section 8: the train split is used for fine-tuning, the validation split for every choice, and the test set is never loaded.
+
+**How a sparse model is made:**
+
+1. **Start from the FP32 baseline**, loaded (`strict=True`) into `torchvision.models.quantization.resnet18(quantize=False)`, as for structured pruning.
+2. **Rank all weights together: global L1 magnitude.** `torch.nn.utils.prune.global_unstructured` with `L1Unstructured` covers the weights of every convolution and of `fc`, the stem `conv1` included. The given fraction of weights with the smallest |w| is set to zero. The ranking is global across layers, so each layer ends up with a different sparsity: the large layers are pruned most. At 70% sparsity, per-layer sparsity runs from 33.8% (`conv1`) to 84.1% (`layer4.1.conv2`). Biases and BatchNorm are not touched.
+3. **Fine-tune** with exactly the same settings as the structured runs and the FP32 control: class-weighted cross-entropy, strong augmentation, Adam, batch 32, lr 1e-4 with cosine decay over 10 epochs. The pruning masks stay active during fine-tuning, so pruned weights stay exactly zero; `prune.remove` then makes the zeros permanent.
+4. **Select** the epoch with the best validation macro F1; epoch 10 is also reported. Ratios: 30, 50, 70 and 90% (seed 42). The best ratio, 70%, is repeated with seeds 1 and 2.
+5. **Checks.** The run stops if a check fails. The achieved sparsity must equal the target. The zero count must be unchanged after fine-tuning, after `fuse_model()` and in the TorchScript export. The FP32 checkpoint, the split and the config are hashed before and after the run. Every check passed.
+6. **Evaluate** with the shared protocol (section 5), all sparse models and FP32 in one session: [pruning/unstructured/results/evaluation/](pruning/unstructured/results/evaluation/).
+
+**FP32 control.** The controls from section 8 are reused (same fine-tuning, unpruned, seeds 42, 1 and 2), not retrained.
+
+Settings: [settings.json](pruning/unstructured/results/settings.json). Per-layer sparsity: `pruning/unstructured/results/<run>/layers.csv`. Consolidated table and plots: [pruning/unstructured/results/report/](pruning/unstructured/results/report/).
+
+### Results (validation set)
+
+CPU, fused + TorchScript, latency at 1 thread. Change vs FP32: paired bootstrap, 95% CI. Pruned − control comes from the validation pass of the training script (GPU), as in section 8. "Before fine-tuning" is the pruned model evaluated on the CPU right after pruning.
+
+| Model | Non-zero params | Macro F1 before fine-tuning | Macro F1 after fine-tuning (epoch) | Change vs FP32 (95% CI) | Pruned − control | Melanoma recall | Compressed size, gzip (MB) | Latency (ms), 1 / 4 threads |
+|---|---|---|---|---|---|---|---|---|
+| FP32 baseline | 11.18 M | – | 71.04 | – | – | 66.47 | 41.6 | 50.72 / 14.64 |
+| 30% sparse, seed 42 | 7.83 M | 72.25 | 72.37 (7) | +1.33 (−2.36 to +5.26) | −0.11 | 69.94 | 32.0 | 50.87 / 14.68 |
+| 50% sparse, seed 42 | 5.59 M | 71.16 | 72.76 (5) | +1.71 (−1.54 to +5.14) | +0.28 | 63.58 | 24.3 | 50.79 / 14.66 |
+| 70% sparse, seed 42 | 3.36 M | 43.63 | 75.51 (9) | +4.46 (+1.00 to +8.22) | +3.03 | 70.52 | 16.2 | 50.76 / 14.65 |
+| 70% sparse, seed 1 | 3.36 M | 43.63 | 74.65 (7) | +3.61 (−0.08 to +7.56) | +1.44 | 69.94 | 16.2 | 50.71 / 14.68 |
+| 70% sparse, seed 2 | 3.36 M | 43.63 | 71.90 (8) | +0.86 (−2.38 to +4.12) | +1.03 | 67.63 | 16.2 | 50.82 / 14.73 |
+| 90% sparse, seed 42 | 1.13 M | 11.41 | 71.03 (8) | −0.02 (−3.69 to +3.39) | −1.42 | 75.72 | 7.2 | 50.89 / 14.63 |
+
+Every model has 11.18 M parameters in total, 1.82 GMACs and a 44.8 MB file, as FP32. The compressed size is the `state_dict` compressed with gzip (level 9).
+
+**Best ratio on validation (70%), 3 seeds:**
+
+| | FP32 | FP32 control, mean (min–max) | 70% sparse, mean (min–max) | Pruned − control, by seed 42 / 1 / 2 (mean) |
+|---|---|---|---|---|
+| Macro F1 | 71.04 | 72.27 (70.98–73.19) | 74.02 (71.90–75.51) | +3.03 / +1.44 / +1.03 (+1.83) |
+| Balanced accuracy | 71.50 | 73.03 (71.85–74.26) | 73.86 (71.33–76.15) | +3.36 / −0.14 / −0.34 (+0.96) |
+| Melanoma recall | 66.47 | 70.52 (69.94–71.10) | 69.36 (67.63–70.52) | −0.58 / 0.00 / −2.89 (−1.16) |
+| Accuracy | 82.18 | 82.35 (81.79–82.70) | 83.49 (82.90–84.66) | +0.26 / +2.15 / +1.17 (+1.20) |
+
+At epoch 10 for both models, macro F1 pruned − control is +2.02 / +0.69 / +2.58 (mean +1.76).
+
+- **Up to 50%, unstructured pruning is free even without fine-tuning.** Right after pruning, macro F1 is 72.3 at 30% and 71.2 at 50%, the FP32 level. At 70% it falls to 43.6, and at 90% the model predicts "nv" for every image (macro F1 11.4).
+- **After fine-tuning, no ratio up to 90% loses macro F1 against FP32.** Even at 90% sparsity (1.1 M non-zero weights), macro F1 is 71.03, against 71.04 for FP32.
+- **70% gives no loss, and maybe a small gain.** On 3 seeds, macro F1 is 74.02 on average against 71.04 for FP32 (+3.0). Every seed beats its control, by +1.0 to +3.0 (mean +1.8). That is about the seed-to-seed spread (about 2 points), and only seed 42 is significant against FP32. The seed-42 result alone (+3.0 vs control) overstated the gain. Balanced accuracy is level with the control, and melanoma recall does not improve (−1.2 vs control on average).
+- **No speed, memory or energy gain.** PyTorch runs the zeros through dense kernels, so latency stays within 0.6% of FP32 at every ratio, peak RAM within +3%, and estimated energy within −4%, inside the ±5% noise of this estimate. The file is the same 44.8 MB. The only real saving is storage once compressed: 16.2 MB at 70% (2.6× smaller than FP32 compressed) and 7.2 MB at 90% (5.7×). A speed-up would need sparse kernels or hardware that skip zeros.
+- **Compared with structured pruning** (section 8): unstructured pruning keeps accuracy at far higher ratios (70–90% of weights against 10% of filters) but gives no speed-up, whereas structured pruning is 1.07× faster at 10% and 1.6× at 40%, at the cost of accuracy. Compared with INT8 QAT (section 7), which is 7.5× faster and 4× smaller with no loss, unstructured pruning only competes on compressed storage.
+
 ## Next steps
 
-- Optional: quantize the pruned models (INT8 QAT or static PTQ) to combine both techniques; longer fine-tuning after pruning.
+- Optional: quantize the pruned models (INT8 QAT or static PTQ) to combine both techniques: structured pruning + INT8 for speed, unstructured sparsity + INT8 for compressed size. Longer fine-tuning after structured pruning.
 - Once every model is final, evaluate all of them once on the held-out test set (`python evaluation/evaluate.py --split test`).
 
 ## Reproduce
