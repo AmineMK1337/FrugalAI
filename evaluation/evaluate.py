@@ -3,7 +3,7 @@ by model and metric type, each CSV next to its plots. The only difference betwee
 
 Format:      every model runs as fused (Conv+BatchNorm+ReLU) TorchScript. FP32 and weight-only models are loaded
              into torchvision.models.quantization.resnet18 (quantize=False), fused with fuse_model() and traced
-             with torch.jit.trace; QAT is already fused INT8 TorchScript. Before anything is measured, each
+             with torch.jit.trace; static PTQ and QAT are already fused INT8 TorchScript. Before anything is measured, each
              fused model is checked against its unfused version (same predictions, logits equal up to rounding).
 Performance: accuracy, precision, recall, specificity, F1, AUC (macro averages, and per class), each with a
              95% bootstrap CI and a paired bootstrap against FP32 (same resamples for both models).
@@ -16,11 +16,11 @@ Environment: energy and CO2e per 1,000 images at 1 thread, ESTIMATED by CodeCarb
 
 Nothing is trained, calibrated or modified; model files, split and config are hashed before and after the run.
 
-Structured pruning (pruning/structured/): pruned and FP32-control models are whole saved modules
-(pruning/structured/models/<run>_selected.pt), fused with fuse_model() and traced like FP32. FLOPs and parameters are
+Structured pruning (pruning/structured/filter/): pruned and FP32-control models are whole saved modules
+(pruning/structured/filter/models/<run>_selected.pt), fused with fuse_model() and traced like FP32. FLOPs and parameters are
 counted on each model's own architecture. They are evaluated in a separate session and folder, with FP32 re-measured
 there as the timing reference:
-  python evaluation/evaluate.py --models fp32 pruned20_seed42 ... --results-dir evaluation/results_pruning
+  python evaluation/evaluate.py --models fp32 pruned20_seed42 ... --results-dir pruning/structured/filter/results/evaluation
 
 Unstructured pruning (pruning/unstructured/): sparse<pct>_seed<s> are whole saved modules with exact zeros
 (pruning/unstructured/models/<run>_selected.pt), fused and traced the same way; dense CPU kernels still multiply the
@@ -28,9 +28,9 @@ zeros. Storage columns for every model with FP32 weights: zeros and sparsity of 
 parameters, and the torch.save(state_dict) size dense and gzip-compressed (level 9):
   python evaluation/evaluate.py --models fp32 sparse50_seed42 ... --results-dir pruning/unstructured/results/evaluation
 
-Block pruning (pruning/block/): blocks<k>_seed<s> are whole saved modules with k residual blocks replaced by
-nn.Identity (pruning/block/models/<run>_selected.pt), fused and traced the same way:
-  python evaluation/evaluate.py --models fp32 blocks1_seed42 ... --results-dir pruning/block/results/evaluation
+Block pruning (pruning/structured/block/): blocks<k>_seed<s> are whole saved modules with k residual blocks replaced by
+nn.Identity (pruning/structured/block/models/<run>_selected.pt), fused and traced the same way:
+  python evaluation/evaluate.py --models fp32 blocks1_seed42 ... --results-dir pruning/structured/block/results/evaluation
 
 Usage: python evaluation/evaluate.py [--split validation|test] [--repeats 3] [--country TUN] [--models ...]
        [--results-dir DIR]
@@ -67,9 +67,9 @@ ROOT = HERE.parent
 PROJECT = ROOT / "resnet18_finetunning"
 WEIGHT_ONLY = ROOT / "quantization" / "ptq" / "weight_only"
 QAT = ROOT / "quantization" / "qat"
-PRUNING = ROOT / "pruning" / "structured"
+PRUNING = ROOT / "pruning" / "structured" / "filter"
 UNSTRUCTURED = ROOT / "pruning" / "unstructured"
-BLOCK = ROOT / "pruning" / "block"
+BLOCK = ROOT / "pruning" / "structured" / "block"
 RESULTS = HERE / "results"
 sys.path[:0] = [str(PROJECT / "src"), str(WEIGHT_ONLY)]
 LAUNCH_DIR = Path.cwd()  # relative --results-dir is taken from where the script is launched
@@ -84,6 +84,8 @@ CHECKPOINT = PROJECT / "results/strong_cosine25_resnet18/resnet18_baseline.pth"
 PER_CHANNEL = WEIGHT_ONLY / "results/resnet18_w8_perchannel.pt"
 PER_TENSOR = WEIGHT_ONLY / "results/resnet18_w8_pertensor.pt"
 QAT_INT8 = QAT / "resnet18_qat_int8.pt"
+STATIC = ROOT / "quantization" / "ptq" / "static"
+STATIC_INT8 = STATIC / "resnet18_static_int8.pt"
 NUM_CLASSES = 7
 FORMAT = "fused + TorchScript"
 BATCH_SIZE = 32
@@ -131,6 +133,9 @@ MODELS = {  # name: weights (None = already TorchScript), unfused reference, fil
     "weight_only_per_tensor": dict(
         state=weight_only_state(PER_TENSOR), unfused=lambda: q.load_dequantized_resnet18(PER_TENSOR, NUM_CLASSES),
         file=PER_TENSOR, note="INT8 weights on disk, dequantized to FP32 at load: computes in FP32"),
+    "ptq_static": dict(state=None, unfused=None, file=STATIC_INT8,
+                       note="INT8 weights and activations (x86 engine), static PTQ, calibrated on 1,000 train images "
+                            "(seed 42)"),
     "qat": dict(state=None, unfused=None, file=QAT_INT8,
                 note="INT8 weights and activations (x86 engine), QAT, final model (epoch 10)"),
 }
@@ -138,7 +143,7 @@ DEFAULT_MODELS = list(MODELS)
 
 
 def saved_module(path):
-    """A whole model saved by pruning/structured/prune.py (own file: weights_only=False), eval mode."""
+    """A whole model saved by pruning/structured/filter/prune.py (own file: weights_only=False), eval mode."""
     return lambda: torch.load(path, map_location="cpu", weights_only=False).eval()
 
 
@@ -169,7 +174,7 @@ for _path in sorted((BLOCK / "models").glob("blocks*_selected.pt")):  # blocks<k
              "epoch")
 
 def export_torchscript(workdir):
-    """Path of each model's fused TorchScript file. QAT already is one; the others are traced here."""
+    """Path of each model's fused TorchScript file. Static PTQ and QAT already are one; the others are traced here."""
     paths = {}
     for name, spec in MODELS.items():
         if "module" in spec:
@@ -301,6 +306,11 @@ def check_against_earlier_results(overall):
         for metric in (m for m in PERFORMANCE if m in qat):
             if abs(overall[name][metric] - qat.loc[old, metric]) > tolerance[metric]:
                 sys.exit(f"CHECK FAILED: {name} {metric} differs from {QAT}/results")
+    static = pd.read_csv(STATIC / "results/validation_results.csv").set_index("model")
+    if "ptq_static" in MODELS:  # the saved file is the seed-42 calibration
+        for metric in (m for m in PERFORMANCE if m in static):
+            if abs(overall["ptq_static"][metric] - static.loc["INT8_seed42", metric]) > tolerance[metric]:
+                sys.exit(f"CHECK FAILED: ptq_static {metric} differs from {STATIC}/results")
     print("Performance matches the results saved when the models were made", flush=True)
 
 
@@ -554,11 +564,12 @@ def main(args):
                     "torch.jit.trace",
             "weight_only_per_channel": "dequantized to FP32, then as fp32",
             "weight_only_per_tensor": "dequantized to FP32, then as fp32",
+            "ptq_static": "saved fused INT8 TorchScript (torch.jit.script), loaded as is",
             "qat": "saved fused INT8 TorchScript (torch.jit.script), loaded as is",
-            "pruned / control": "whole saved FP32 module (pruning/structured/models), fuse_model(), torch.jit.trace",
+            "pruned / control": "whole saved FP32 module (pruning/structured/filter/models), fuse_model(), torch.jit.trace",
             "sparse": "whole saved FP32 module with exact zeros (pruning/unstructured/models), fuse_model(), "
                       "torch.jit.trace; dense kernels",
-            "blocks": "whole saved FP32 module with residual blocks replaced by nn.Identity (pruning/block/models), "
+            "blocks": "whole saved FP32 module with residual blocks replaced by nn.Identity (pruning/structured/block/models), "
                       "fuse_model(), torch.jit.trace"},
         "models": list(MODELS),
         "fused_vs_unfused_check": fused_check.to_dict(orient="records"),

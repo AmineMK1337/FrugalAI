@@ -1,10 +1,10 @@
 """Consolidated table and plots for structured pruning. Reads only saved files (nothing is re-run):
-pruning/structured/results/<run>/ (prune.py) and, when present, evaluation/results_pruning/<run>/ (evaluate.py).
+pruning/structured/filter/results/<run>/ (prune.py) and, when present, pruning/structured/filter/results/evaluation/<run>/ (evaluate.py).
 
 Validation split only. Performance before / after fine-tuning comes from prune.py (GPU evaluation of the same
 validation images); size, parameters, GFLOPs, latency and energy come from evaluate.py (CPU, fused + TorchScript).
 
-Writes pruning/structured/results/report/:
+Writes pruning/structured/filter/results/report/:
   consolidated.csv / consolidated.md     one row per run (+ FP32): target ratio, achieved channel / parameter / GMAC
                                          reduction, balanced accuracy, macro F1, melanoma recall before and after
                                          fine-tuning (selected epoch and epoch 10), size, latency at 1 and 4 threads
@@ -12,7 +12,7 @@ Writes pruning/structured/results/report/:
   f1_vs_ratio, f1_vs_gmacs, f1_vs_latency, channels_per_layer, training_curves, learning_curves,
   pruning_process (.pdf + .png)
 
-Usage: python pruning/structured/report.py
+Usage: python pruning/structured/filter/report.py
 """
 import json
 from pathlib import Path
@@ -24,9 +24,9 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
+ROOT = HERE.parents[2]
 RESULTS = HERE / "results"
-EVAL = ROOT / "evaluation" / "results_pruning"
+EVAL = ROOT / "pruning" / "structured" / "filter" / "results" / "evaluation"
 OUT = RESULTS / "report"
 SPLIT = "validation"
 INK, FP32_COLOR, CONTROL_COLOR, NOTE = "#1f1e1c", "#2a78d6", "#7a7a7a", "#555555"

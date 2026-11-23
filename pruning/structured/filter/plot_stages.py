@@ -4,12 +4,12 @@ The pruned-before-fine-tuning models were not saved. Pruning is deterministic (L
 so they are rebuilt here with prune.py's own function and checked: same architecture as the saved fine-tuned model and
 same validation accuracy as prune.py recorded before fine-tuning (up to 2 images, GPU vs CPU). They are then evaluated
 exactly like evaluate.py does: CPU, fused + TorchScript, same metrics, same 1,000 bootstrap resamples (seed 0).
-FP32 and the fine-tuned models are read from evaluation/results_pruning/ (evaluate.py). Fine-tuning does not change
+FP32 and the fine-tuned models are read from pruning/structured/filter/results/evaluation/ (evaluate.py). Fine-tuning does not change
 the architecture, so size, GFLOPs, latency and energy are the same before and after fine-tuning: the efficiency panel
 shows the measured values of the fine-tuned model for the pruned architecture.
 
-Writes pruning/structured/results/report/stages/: stages_pruned<ratio>_seed42.{png,pdf}, stages_validation.csv.
-Usage: python pruning/structured/plot_stages.py [--ratios 10 20 30 40]
+Writes pruning/structured/filter/results/report/stages/: stages_pruned<ratio>_seed42.{png,pdf}, stages_validation.csv.
+Usage: python pruning/structured/filter/plot_stages.py [--ratios 10 20 30 40]
 """
 import argparse
 import importlib.util
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
+ROOT = HERE.parents[2]
 
 
 def load(name, path):
@@ -38,7 +38,7 @@ import pandas as pd  # noqa: E402
 import torch  # noqa: E402
 import torch.nn as nn  # noqa: E402
 
-EVAL = ROOT / "evaluation" / "results_pruning"
+EVAL = ROOT / "pruning" / "structured" / "filter" / "results" / "evaluation"
 OUT = HERE / "results" / "report" / "stages"
 SPLIT, SEED = "validation", 42
 METRICS = {"accuracy": "Accuracy", "balanced_accuracy": "Balanced\naccuracy", "precision_macro": "Precision",

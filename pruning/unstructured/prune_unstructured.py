@@ -10,11 +10,11 @@ ranked together across layers (so layers end up with different sparsity). Biases
 achieved sparsity is recorded globally and per layer.
 
 Stage 1, right after pruning (no training): full validation metrics.
-Fine-tuning, identical to the structured-pruning runs (pruning/structured/prune.py, whose functions are reused):
+Fine-tuning, identical to the structured-pruning runs (pruning/structured/filter/prune.py, whose functions are reused):
 class-weighted cross-entropy (train-split weights), strong augmentation, Adam, batch 32, lr 1e-4, cosine annealing over
 10 epochs (stepped per epoch), seed given. The pruning masks stay active (weight = weight_orig x mask), so pruned weights
 stay exactly zero; prune.remove then makes the zeros permanent. Selected model = best validation macro F1 epoch (first
-maximum); epoch 10 is also reported. The FP32 control is reused from pruning/structured (control_seed<seed>), not
+maximum); epoch 10 is also reported. The FP32 control is reused from pruning/structured/filter (control_seed<seed>), not
 retrained.
 
 Checks (the run stops if one fails): achieved sparsity = target (rounding), pruned positions still zero and the
@@ -44,7 +44,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 
-_spec = importlib.util.spec_from_file_location("structured_prune", ROOT / "pruning" / "structured" / "prune.py")
+_spec = importlib.util.spec_from_file_location("structured_prune", ROOT / "pruning" / "structured" / "filter" / "prune.py")
 sp = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(sp)  # helpers, data and the fine-tuning loop of the structured runs (also chdir + sys.path)
 
@@ -55,7 +55,7 @@ import torch.nn as nn  # noqa: E402
 import torch.nn.utils.prune as tprune  # noqa: E402
 
 MODELS_DIR, RESULTS = HERE / "models", HERE / "results"
-CONTROL_RESULTS = ROOT / "pruning" / "structured" / "results"
+CONTROL_RESULTS = ROOT / "pruning" / "structured" / "filter" / "results"
 EPOCHS, LR = sp.EPOCHS, sp.LR
 CheckFailed, log = sp.CheckFailed, sp.log
 
@@ -246,7 +246,7 @@ def run(pct, seed, config, val, device, settings):
                "sparsity_checks": checks, "before_finetuning": start, "selected_epoch": best[0],
                "selected": best[1], "epoch10": epoch10, "settings": settings}
     if control:
-        summary["control"] = f"control_seed{seed} (pruning/structured/results)"
+        summary["control"] = f"control_seed{seed} (pruning/structured/filter/results)"
         summary["pruned_minus_control"] = {
             stage: {k: summary[stage][k] - control[stage][k] for k in sp.SCORES} for stage in ("selected", "epoch10")}
     rows = [{"run": name, "stage": stage, **values} for stage, values in
@@ -287,7 +287,7 @@ def main(args):
                         "stepped per epoch", "batch_size": config.batch_size, "augmentation": config.augmentation,
                         "loss": "CrossEntropyLoss, balanced class weights from the train split"},
         "selection": "best validation macro F1 epoch (first maximum); epoch 10 also reported",
-        "control": "pruning/structured/results/control_seed<seed> (same fine-tuning, unpruned), reused",
+        "control": "pruning/structured/filter/results/control_seed<seed> (same fine-tuning, unpruned), reused",
         "gzip": "gzip level 9 of the torch.save(state_dict) bytes",
         "torch": torch.__version__, "gpu": torch.cuda.get_device_name(0), "sha256_protected": hashes}
     (RESULTS / "settings.json").write_text(json.dumps(settings, indent=2))

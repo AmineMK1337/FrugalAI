@@ -7,7 +7,7 @@
 Sources:
   pruning/unstructured/results/report/stage1_cpu_validation.csv                    before fine-tuning (report.py)
   pruning/unstructured/results/evaluation/comparison/performance/table_validation.csv   after fine-tuning (evaluate.py)
-  evaluation/results_pruning/comparison/performance/table_validation.csv           FP32 controls (structured session)
+  pruning/structured/filter/results/evaluation/comparison/performance/table_validation.csv           FP32 controls (structured session)
 Comparisons 1 and 2 use seed 42 (before fine-tuning is identical for every seed). The 95% CI and p-value of the macro F1
 difference are paired bootstrap vs FP32 (1,000 resamples); none exist for pruned - control ("not available").
 
@@ -25,7 +25,7 @@ import pandas as pd  # noqa: E402
 ROOT = Path(__file__).resolve().parents[2]
 BEFORE = ROOT / "pruning/unstructured/results/report/stage1_cpu_validation.csv"
 AFTER = ROOT / "pruning/unstructured/results/evaluation/comparison/performance/table_validation.csv"
-CONTROL = ROOT / "evaluation/results_pruning/comparison/performance/table_validation.csv"
+CONTROL = ROOT / "pruning/structured/filter/results/evaluation/comparison/performance/table_validation.csv"
 OUT = ROOT / "pruning/unstructured/results/comparisons"
 
 METRICS = [("accuracy", "Accuracy"), ("balanced_accuracy", "Balanced accuracy"), ("precision_macro", "Macro precision"),

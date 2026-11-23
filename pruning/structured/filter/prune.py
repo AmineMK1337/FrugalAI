@@ -21,14 +21,14 @@ Data roles: train = fine-tuning; validation = choosing ratios and epochs; the te
 The FP32 checkpoint, the split and the config are hashed before and after the run.
 
 Writes, for a run named pruned<ratio>_seed<seed> or control_seed<seed>:
-  pruning/structured/models/<run>_{selected,epoch10}.pt   whole model (torch.save; load with weights_only=False)
-  pruning/structured/models/<run>_{selected,epoch10}.ts   TorchScript (traced, unfused, eval mode)
-  pruning/structured/results/<run>/  layers.csv (per-layer channels before/after, achieved ratio), summary.json
+  pruning/structured/filter/models/<run>_{selected,epoch10}.pt   whole model (torch.save; load with weights_only=False)
+  pruning/structured/filter/models/<run>_{selected,epoch10}.ts   TorchScript (traced, unfused, eval mode)
+  pruning/structured/filter/results/<run>/  layers.csv (per-layer channels before/after, achieved ratio), summary.json
       (overall channel / parameter / GMAC reduction, metrics before fine-tuning, selected epoch, epoch 10, and a
       copy of the run's settings: pruning, fine-tuning, versions, hashes),
       training_history.csv, metrics.csv (one row per stage), run.log
 
-Usage: python pruning/structured/prune.py --ratios 0.2 [0.1 ...] --seeds 42 [1 2] [--control]
+Usage: python pruning/structured/filter/prune.py --ratios 0.2 [0.1 ...] --seeds 42 [1 2] [--control]
 """
 import argparse
 import copy
@@ -43,7 +43,7 @@ import warnings
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
+ROOT = HERE.parents[2]
 PROJECT = ROOT / "resnet18_finetunning"
 sys.path.insert(0, str(PROJECT / "src"))
 os.chdir(PROJECT)  # config and split paths are relative to the fine-tuning project

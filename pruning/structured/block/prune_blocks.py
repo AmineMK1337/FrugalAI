@@ -15,21 +15,21 @@ class-weighted cross-entropy on a fixed subset of 1,000 TRAIN images (seed 42, e
 normalize, no augmentation) when that block alone is replaced by the identity. The k blocks with the smallest
 increase are removed (k = 1, 2, 3, 4). The validation split is not used for the ranking.
 
-Fine-tuning, identical to pruning/structured/prune.py (whose functions are reused): class-weighted cross-entropy
+Fine-tuning, identical to pruning/structured/filter/prune.py (whose functions are reused): class-weighted cross-entropy
 (train-split weights), strong augmentation, Adam, batch 32, lr 1e-4, cosine annealing over 10 epochs (stepped per
 epoch), seed given. Selected model = best validation macro F1 epoch (first maximum); epoch 10 is also reported.
-The FP32 control is reused from pruning/structured (control_seed<seed>), not retrained.
+The FP32 control is reused from pruning/structured/filter (control_seed<seed>), not retrained.
 
 Data roles: train = block ranking and fine-tuning; validation = choosing k and epochs; the test set is never loaded.
 The FP32 checkpoint, the split and the config are hashed before and after.
 
 Writes:
-  pruning/block/results/block_importance.csv   loss / accuracy / macro F1 on the ranking subset with each block removed
-  pruning/block/models/blocks<k>_seed<s>_{before,selected,epoch10}.{pt,ts}  whole model (torch.save; load with
+  pruning/structured/block/results/block_importance.csv   loss / accuracy / macro F1 on the ranking subset with each block removed
+  pruning/structured/block/models/blocks<k>_seed<s>_{before,selected,epoch10}.{pt,ts}  whole model (torch.save; load with
       weights_only=False) and TorchScript. before = right after removal, not fine-tuned. Not in git.
-  pruning/block/results/blocks<k>_seed<s>/  summary.json, training_history.csv, metrics.csv (one row per stage), run.log
+  pruning/structured/block/results/blocks<k>_seed<s>/  summary.json, training_history.csv, metrics.csv (one row per stage), run.log
 
-Usage: python pruning/block/prune_blocks.py --blocks 1 2 3 4 --seeds 42 [1 2]
+Usage: python pruning/structured/block/prune_blocks.py --blocks 1 2 3 4 --seeds 42 [1 2]
 """
 import argparse
 import copy
@@ -40,9 +40,9 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
+ROOT = HERE.parents[2]
 
-_spec = importlib.util.spec_from_file_location("structured_prune", ROOT / "pruning" / "structured" / "prune.py")
+_spec = importlib.util.spec_from_file_location("structured_prune", ROOT / "pruning" / "structured" / "filter" / "prune.py")
 sp = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(sp)  # helpers, data and the fine-tuning loop of the structured runs (also chdir + sys.path)
 
@@ -56,7 +56,7 @@ from torch.utils.data import DataLoader, Subset  # noqa: E402
 from ham10000.data import Ham10000Dataset, eval_transform, lesion_split  # noqa: E402
 
 MODELS_DIR, RESULTS = HERE / "models", HERE / "results"
-CONTROL_RESULTS = ROOT / "pruning" / "structured" / "results"
+CONTROL_RESULTS = ROOT / "pruning" / "structured" / "filter" / "results"
 REMOVABLE = ["layer1.0", "layer1.1", "layer2.1", "layer3.1", "layer4.1"]
 RANKING_IMAGES, RANKING_SEED = 1000, 42
 EPOCHS, LR = sp.EPOCHS, sp.LR
@@ -180,7 +180,7 @@ def run(k, seed, order, config, val, device, settings):
                "before_finetuning": start, "selected_epoch": best[0], "selected": best[1], "epoch10": epoch10,
                "settings": settings}
     if control:
-        summary["control"] = f"control_seed{seed} (pruning/structured/results)"
+        summary["control"] = f"control_seed{seed} (pruning/structured/filter/results)"
         summary["pruned_minus_control"] = {
             stage: {k_: summary[stage][k_] - control[stage][k_] for k_ in sp.SCORES} for stage in ("selected", "epoch10")}
     rows = [{"run": name, "stage": stage, **values} for stage, values in
@@ -229,7 +229,7 @@ def main(args):
                         "stepped per epoch", "batch_size": config.batch_size, "augmentation": config.augmentation,
                         "loss": "CrossEntropyLoss, balanced class weights from the train split"},
         "selection": "best validation macro F1 epoch (first maximum); epoch 10 also reported",
-        "control": "pruning/structured/results/control_seed<seed> (same fine-tuning, unpruned), reused",
+        "control": "pruning/structured/filter/results/control_seed<seed> (same fine-tuning, unpruned), reused",
         "torch": torch.__version__, "gpu": torch.cuda.get_device_name(0), "sha256_protected": hashes}
     (RESULTS / "settings.json").write_text(json.dumps(settings, indent=2))
     for seed in args.seeds:

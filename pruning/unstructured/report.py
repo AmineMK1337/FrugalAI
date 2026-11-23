@@ -5,8 +5,8 @@ Sources:
                                                before fine-tuning / selected epoch / epoch 10 (GPU), pruned - control
   pruning/unstructured/results/evaluation/     evaluate.py (CPU, fused + TorchScript): performance with CIs and paired
                                                bootstrap vs FP32, storage, latency, memory, energy (estimate)
-  pruning/structured/results/control_seed<s>/  the FP32 control (same fine-tuning, unpruned), reused
-  evaluation/results_pruning/                  structured pruning, for the structured vs unstructured plots
+  pruning/structured/filter/results/control_seed<s>/  the FP32 control (same fine-tuning, unpruned), reused
+  pruning/structured/filter/results/evaluation/                  structured pruning, for the structured vs unstructured plots
 Stage 1 (pruned, before fine-tuning) is evaluated here on the CPU exactly like evaluate.py does (fused + TorchScript,
 same metrics, same 1,000 bootstrap resamples paired with FP32), from the saved <run>_before.pt. It is not timed: it has
 the same architecture and the same zeros as the fine-tuned model.
@@ -37,8 +37,8 @@ import torch  # noqa: E402
 RESULTS = HERE / "results"
 EVAL = RESULTS / "evaluation"
 OUT = RESULTS / "report"
-CONTROL = ROOT / "pruning" / "structured" / "results"
-STRUCTURED_EVAL = ROOT / "evaluation" / "results_pruning"
+CONTROL = ROOT / "pruning" / "structured" / "filter" / "results"
+STRUCTURED_EVAL = ROOT / "pruning" / "structured" / "filter" / "results" / "evaluation"
 SPLIT = "validation"
 INK, GRID, NOTE = "#1f1e1c", "#e5e5e5", "#555555"
 FP32_COLOR, CONTROL_COLOR = "#2a78d6", "#9a9a9a"
@@ -207,7 +207,7 @@ def markdown(table):
     lines.append("")
     lines.append("Before fine-tuning: CPU (this script); selected: CPU (evaluate.py) when evaluated, else GPU "
                  "(prune_unstructured.py); epoch 10 and pruned − control: GPU validation of the training scripts "
-                 "(control = pruning/structured control_seed<seed>). Validation set, 1,532 images. Energy: CodeCarbon "
+                 "(control = pruning/structured/filter control_seed<seed>). Validation set, 1,532 images. Energy: CodeCarbon "
                  "estimate, no power counter.")
     return "\n".join(lines)
 

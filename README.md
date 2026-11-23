@@ -1,6 +1,6 @@
 # FrugalAI
 
-Skin-lesion classification on HAM 10000 with a fine-tuned ResNet-18. This page summarizes the work so far: the data split, fine-tuning, and the evaluation of the FP32 baseline against its INT8 versions: weight-only quantization, per-channel and per-tensor ([quantization/ptq/weight_only/](quantization/ptq/weight_only/)), and quantization-aware training ([quantization/qat/](quantization/qat/)), plus structured (channel) pruning ([pruning/structured/](pruning/structured/)) and unstructured (weight) pruning ([pruning/unstructured/](pruning/unstructured/)), both in FP32.
+Skin-lesion classification on HAM 10000 with a fine-tuned ResNet-18. This page summarizes the work so far: the data split, fine-tuning, and the evaluation of the FP32 baseline against its INT8 versions: weight-only quantization, per-channel and per-tensor ([quantization/ptq/weight_only/](quantization/ptq/weight_only/)), and quantization-aware training ([quantization/qat/](quantization/qat/)), plus pruning in FP32: structured filter pruning ([pruning/structured/filter/](pruning/structured/filter/)), structured block pruning ([pruning/structured/block/](pruning/structured/block/)) and unstructured weight pruning ([pruning/unstructured/](pruning/unstructured/)).
 
 ## 1. Dataset
 
@@ -167,9 +167,9 @@ From 32 down to 16 bits nothing changes: the predictions are 100% identical to F
 
 ## 8. Structured pruning (FP32)
 
-[pruning/structured/prune.py](pruning/structured/prune.py) removes whole filters (output channels) from the convolutions, so the layers become physically smaller. Weights stay FP32; there is no quantization and no unstructured pruning. Data roles: train split = fine-tuning; validation split = choosing ratios and epochs; the test set is not used.
+[pruning/structured/filter/prune.py](pruning/structured/filter/prune.py) removes whole filters (output channels) from the convolutions, so the layers become physically smaller. Weights stay FP32; there is no quantization and no unstructured pruning. Data roles: train split = fine-tuning; validation split = choosing ratios and epochs; the test set is not used.
 
-**How a pruned model is made** (diagram and measured macro F1 at each stage: [pruning_process.png](pruning/structured/results/report/pruning_process.png)):
+**How a pruned model is made** (diagram and measured macro F1 at each stage: [pruning_process.png](pruning/structured/filter/results/report/pruning_process.png)):
 
 1. **Start from the FP32 baseline**, loaded (`strict=True`) into `torchvision.models.quantization.resnet18(quantize=False)`, so the pruned models can be fused now and quantized later.
 2. **Dependency groups.** [Torch-Pruning](https://github.com/VainF/Torch-Pruning) 1.6.1 builds the dependency graph. Convolutions whose outputs are added by a residual connection (the second conv of each block and the downsample conv) share their channel indices and are pruned together, so the additions stay consistent.
@@ -181,15 +181,15 @@ From 32 down to 16 bits nothing changes: the predictions are 100% identical to F
    The achieved ratio is recorded per layer (rounding): 10.2–10.9%, 20.1–20.3%, 30.1–31.2% and 40.0–40.6% in the pruned groups.
 5. **Fine-tune**, with the same setup as the FP32 training: class-weighted cross-entropy (weights from the train split), strong augmentation, Adam, batch 32, lr 1e-4 with cosine decay over 10 epochs, seed 42 (the best ratio, 10%, and the control are repeated with seeds 1 and 2). The model is evaluated on validation right after pruning and after every epoch.
 6. **Select and save** the epoch with the best validation macro F1 (epoch 10 is also reported), as the whole model (`torch.save`) and as TorchScript.
-7. **Evaluate** with the shared protocol (section 5), in [evaluation/results_pruning/](evaluation/results_pruning/).
+7. **Evaluate** with the shared protocol (section 5), in [pruning/structured/filter/results/evaluation/](pruning/structured/filter/results/evaluation/).
 
 **FP32 control.** The unpruned model fine-tuned with exactly the same settings. Comparing pruned models with it separates the effect of pruning from the effect of the extra fine-tuning.
 
-Settings: [settings.json](pruning/structured/results/settings.json), with a copy in each run's `summary.json`. Per-layer channels before/after: `pruning/structured/results/<run>/layers.csv`.
+Settings: [settings.json](pruning/structured/filter/results/settings.json), with a copy in each run's `summary.json`. Per-layer channels before/after: `pruning/structured/filter/results/<run>/layers.csv`.
 
 ### Results (validation set)
 
-All models were evaluated in one session by evaluate.py (CPU, fused + TorchScript; latency at 1 thread), FP32 included as the timing reference: [evaluation/results_pruning/](evaluation/results_pruning/). Change vs FP32: paired bootstrap, 95% CI. Energy is an estimate, about run time × an assumed power. Between models with the same architecture (FP32 and the three controls) it varies by up to ±5%, so only larger differences are meaningful.
+All models were evaluated in one session by evaluate.py (CPU, fused + TorchScript; latency at 1 thread), FP32 included as the timing reference: [pruning/structured/filter/results/evaluation/](pruning/structured/filter/results/evaluation/). Change vs FP32: paired bootstrap, 95% CI. Energy is an estimate, about run time × an assumed power. Between models with the same architecture (FP32 and the three controls) it varies by up to ±5%, so only larger differences are meaningful.
 
 | Model | Params | GMACs | Macro F1 right after pruning | Macro F1 after fine-tuning | Change vs FP32 (95% CI) | Melanoma recall | Latency (ms), 1 / 4 threads | Size (MB) | Peak RAM vs FP32 | Energy vs FP32 |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -204,7 +204,7 @@ All models were evaluated in one session by evaluate.py (CPU, fused + TorchScrip
 | Pruned 30%, seed 42 | 5.52 M (−51%) | 1.06 (−42%) | 11.44 | 63.25 | −7.80 (−12.00 to −3.58) | 73.41 | 36.80 / 11.66 (1.38×) | 22.2 | −28% | −31% |
 | Pruned 40%, seed 42 | 4.07 M (−64%) | 0.85 (−53%) | 11.41 | 60.66 | −10.39 (−14.25 to −6.64) | 61.85 | 31.92 / 10.43 (1.60×) | 16.4 | −35% | −37% |
 
-"Right after pruning" is the CPU evaluation of the pruned models before fine-tuning (see *Three comparisons* below). Pruning is deterministic, so it is the same for every seed. It differs from prune.py's GPU validation by at most one image (one image at 10%: 37.96 there). Consolidated table, pruned − control by seed and training plots: [pruning/structured/results/report/](pruning/structured/results/report/).
+"Right after pruning" is the CPU evaluation of the pruned models before fine-tuning (see *Three comparisons* below). Pruning is deterministic, so it is the same for every seed. It differs from prune.py's GPU validation by at most one image (one image at 10%: 37.96 there). Consolidated table, pruned − control by seed and training plots: [pruning/structured/filter/results/report/](pruning/structured/filter/results/report/).
 
 **Best ratio on validation (10%), 3 seeds** (seeds only change the fine-tuning: image order and augmentation):
 
@@ -215,7 +215,7 @@ All models were evaluated in one session by evaluate.py (CPU, fused + TorchScrip
 | Melanoma recall | 66.47 | 70.52 (69.94–71.10) | 72.06 (69.36–75.72) | +4.62 / +1.16 / −1.16 (+1.54) |
 | Accuracy | 82.18 | 82.35 (81.79–82.70) | 82.11 (81.53–82.90) | −0.78 / +0.33 / −0.26 (−0.24) |
 
-Pruned − control above uses each model's selected epoch (CPU evaluation). At epoch 10 for both models, macro F1 pruned − control is −1.79 / −4.91 / +0.94 (mean −1.92; prune.py validation, [pruned_minus_control.csv](pruning/structured/results/report/pruned_minus_control.csv)).
+Pruned − control above uses each model's selected epoch (CPU evaluation). At epoch 10 for both models, macro F1 pruned − control is −1.79 / −4.91 / +0.94 (mean −1.92; prune.py validation, [pruned_minus_control.csv](pruning/structured/filter/results/report/pruned_minus_control.csv)).
 
 - **Fine-tuning is essential.** Right after pruning, every model is broken: macro F1 11–38 (every drop significant, p < 0.001), and at 30–40% the model predicts "nv" for almost every image (melanoma recall 0). Ten epochs recover most of the loss.
 - **10% is nearly free compared with the original model.** On 3 seeds, macro F1 is 70.39 on average vs 71.04 for FP32 (−0.65), and no seed's difference is significant. The seed-to-seed spread is about 2 points, both for the pruned model and for the control, so one training run cannot resolve differences of this size.
@@ -228,7 +228,7 @@ Pruned − control above uses each model's selected epoch (CPU evaluation). At e
 
 ### Three comparisons
 
-[pruning/structured/comparisons.py](pruning/structured/comparisons.py) presents the results as three comparisons, each with a table (PDF, PNG, CSV) and a figure, plus one efficiency and one environment figure: [pruning/structured/results/comparaison/](pruning/structured/results/comparaison/). Nothing is retrained. The pruned models before fine-tuning were not saved by prune.py, so the script rebuilds them with prune.py's own deterministic pruning (parameter count and prune.py's logged accuracy are checked) and evaluates them like evaluate.py, with a paired bootstrap against FP32.
+[pruning/structured/filter/comparisons.py](pruning/structured/filter/comparisons.py) presents the results as three comparisons, each with a table (PDF, PNG, CSV) and a figure, plus one efficiency and one environment figure: [pruning/structured/filter/results/comparaison/](pruning/structured/filter/results/comparaison/). Nothing is retrained. The pruned models before fine-tuning were not saved by prune.py, so the script rebuilds them with prune.py's own deterministic pruning (parameter count and prune.py's logged accuracy are checked) and evaluates them like evaluate.py, with a paired bootstrap against FP32.
 
 1. **FP32 baseline vs pruned, before fine-tuning:** the immediate damage of one-shot pruning.
 2. **FP32 baseline vs pruned, after fine-tuning:** the final compressed model against the original model.

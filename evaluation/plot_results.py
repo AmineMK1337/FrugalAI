@@ -27,6 +27,7 @@ STYLE = {  # the same look for a model in every plot
                                     color="#eb6834", hatch="///"),
     "weight_only_per_tensor": dict(label="Weight-only INT8 per-tensor", short="Weight-only\nper-tensor",
                                    color="#1baf7a", hatch="\\\\\\"),
+    "ptq_static": dict(label="INT8 static PTQ", short="INT8\nstatic PTQ", color="#e87ba4", hatch="xx"),
     "qat": dict(label="INT8 QAT", short="INT8\nQAT", color="#8b5cc7", hatch="..."),
 }
 MODELS = list(STYLE)
