@@ -1,0 +1,126 @@
+{
+  "run": "blocks1_seed1",
+  "blocks_removed": [
+    "layer3.1"
+  ],
+  "blocks_kept": [
+    "layer1.0",
+    "layer1.1",
+    "layer2.0",
+    "layer2.1",
+    "layer3.0",
+    "layer4.0",
+    "layer4.1"
+  ],
+  "seed": 1,
+  "params_before": 11180103,
+  "params_after": 9999431,
+  "gmacs_before": 1.820915719,
+  "gmacs_after": 1.589453831,
+  "param_reduction_pct": 10.56047515841312,
+  "gmac_reduction_pct": 12.711290565777144,
+  "before_finetuning": {
+    "accuracy": 0.6840731070496083,
+    "balanced_accuracy": 0.5521028079251223,
+    "precision_macro": 0.666651072031963,
+    "recall_macro": 0.5521028079251223,
+    "specificity_macro": 0.9442131377903867,
+    "f1_macro": 0.5098771875988503,
+    "auc_macro": 0.8764604843541967,
+    "melanoma_recall": 0.7341040462427746,
+    "identical_to_fp32_pct": 75.65274151436032,
+    "val_loss": 2.753523826599121
+  },
+  "selected_epoch": 10,
+  "selected": {
+    "accuracy": 0.8178851174934726,
+    "balanced_accuracy": 0.7117398048806101,
+    "precision_macro": 0.7089797568568411,
+    "recall_macro": 0.7117398048806101,
+    "specificity_macro": 0.9622881309310606,
+    "f1_macro": 0.702821503707392,
+    "auc_macro": 0.9595674344748666,
+    "melanoma_recall": 0.7052023121387283,
+    "identical_to_fp32_pct": 90.40469973890339,
+    "val_loss": 1.2403925657272339
+  },
+  "epoch10": {
+    "accuracy": 0.8178851174934726,
+    "balanced_accuracy": 0.7117398048806101,
+    "precision_macro": 0.7089797568568411,
+    "recall_macro": 0.7117398048806101,
+    "specificity_macro": 0.9622881309310606,
+    "f1_macro": 0.702821503707392,
+    "auc_macro": 0.9595674344748666,
+    "melanoma_recall": 0.7052023121387283,
+    "identical_to_fp32_pct": 90.40469973890339,
+    "val_loss": 1.2403925657272339
+  },
+  "settings": {
+    "checkpoint": "resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth",
+    "config": "configs/strong_cosine25.yaml",
+    "model": "torchvision.models.quantization.resnet18(weights=None, quantize=False, num_classes=7), strict load",
+    "pruning": "block (depth) pruning: the k least important identity-shortcut BasicBlocks replaced by nn.Identity",
+    "removable_blocks": [
+      "layer1.0",
+      "layer1.1",
+      "layer2.1",
+      "layer3.1",
+      "layer4.1"
+    ],
+    "importance": "class-weighted cross-entropy increase on 1000 train images (seed 42, eval preprocessing) when the block alone is removed; ranked once on the full model",
+    "removal_order": [
+      "layer3.1",
+      "layer2.1",
+      "layer4.1",
+      "layer1.0",
+      "layer1.1"
+    ],
+    "fine_tuning": {
+      "epochs": 10,
+      "optimizer": "Adam",
+      "lr": 0.0001,
+      "schedule": "CosineAnnealingLR(T_max=10), stepped per epoch",
+      "batch_size": 32,
+      "augmentation": "strong",
+      "loss": "CrossEntropyLoss, balanced class weights from the train split"
+    },
+    "selection": "best validation macro F1 epoch (first maximum); epoch 10 also reported",
+    "control": "pruning/structured/results/control_seed<seed> (same fine-tuning, unpruned), reused",
+    "torch": "2.12.0+cu126",
+    "gpu": "NVIDIA A40-24Q",
+    "sha256_protected": {
+      "/home/salma/FrugalAI/resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth": "1233528ddb3f0ebab9eeae6dae36acbc98292cc9aa34dadb7e553d5852077927",
+      "/home/salma/FrugalAI/resnet18_finetunning/splits/ham10000_splits.csv": "d7b17a1900f233db66a2e76d66eea333863404c53ea4fa2c154dbecd6cfe4f82",
+      "/home/salma/FrugalAI/resnet18_finetunning/configs/strong_cosine25.yaml": "da7f6b852cd0d4a6d7715ee26a768c614f7cab1b14af562546360a9f4409f73e"
+    }
+  },
+  "control": "control_seed1 (pruning/structured/results)",
+  "pruned_minus_control": {
+    "selected": {
+      "accuracy": -0.007180156657963455,
+      "balanced_accuracy": -0.03074376903507381,
+      "precision_macro": -0.026160347964504616,
+      "recall_macro": -0.03074376903507381,
+      "specificity_macro": -0.00038458486046444307,
+      "f1_macro": -0.029274087235537705,
+      "auc_macro": 0.00262121713772856,
+      "melanoma_recall": 0.00578034682080919
+    },
+    "epoch10": {
+      "accuracy": -0.007180156657963455,
+      "balanced_accuracy": -0.03074376903507381,
+      "precision_macro": -0.026160347964504616,
+      "recall_macro": -0.03074376903507381,
+      "specificity_macro": -0.00038458486046444307,
+      "f1_macro": -0.029274087235537705,
+      "auc_macro": 0.00262121713772856,
+      "melanoma_recall": 0.00578034682080919
+    }
+  },
+  "files": {
+    "before": "pruning/block/models/blocks1_seed1_before.pt",
+    "selected": "pruning/block/models/blocks1_seed1_selected.pt",
+    "epoch10": "pruning/block/models/blocks1_seed1_epoch10.pt"
+  }
+}
