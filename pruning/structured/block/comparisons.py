@@ -160,6 +160,7 @@ def main(args):
                    f"After 10 epochs: macro F1 " + ", ".join(f"{v:.1f}" for v in f1a)
                    + f" with 1, 2, 3, 4 blocks removed (FP32 {fp32['f1_macro'] * 100:.1f}; seed 42)")
     performance_vs_control(after, best)
+    seeds_figure(perf, best)
     efficiency(eff)
     environment(env)
     (OUT / "comparisons.md").write_text(markdown(t1, t2, t3, best, order_note))
@@ -207,6 +208,44 @@ def performance_vs_control(after, best):
     sc.save(fig, f"fig3_performance_control_vs_blocks{best}")
 
 
+def seeds_figure(perf, best):
+    """All seeds of the repeated configuration in one plot: does the result hold beyond seed 42?"""
+    metrics = sc.PERF + [("melanoma_recall", "Melanoma recall")]
+    runs = [("fp32", "FP32 baseline", uc.GRAY)] + [
+        (f"blocks{best}_seed{s}", f"{blocks_label(best)}, seed {s}", c)
+        for s, c in zip(SEEDS, ["#2a78d6", "#79a8e6", "#b9d1f2"])]
+    fig, ax = plt.subplots(figsize=(12, 4.8), constrained_layout=True)
+    x, w = np.arange(len(metrics)), 0.8 / len(runs)
+    for k, (run, label, color) in enumerate(runs):
+        vals = [perf.loc[run, m] * 100 for m, _ in metrics]
+        xs = x + (k - (len(runs) - 1) / 2) * w
+        ax.bar(xs, vals, width=w * 0.92, color=color, edgecolor="white", linewidth=1, label=label)
+        for xi, v in zip(xs, vals):
+            ax.text(xi, v + 1.5, f"{v:.1f}", ha="center", va="bottom", fontsize=7, color=INK, rotation=90, zorder=4,
+                    bbox={"facecolor": "white", "edgecolor": "none", "pad": 0.5})
+    fp32 = [perf.loc["fp32", m] * 100 for m, _ in metrics]
+    for xi, v in zip(x, fp32):
+        ax.hlines(v, xi - 0.42, xi + 0.42, colors=INK, linestyles="--", linewidth=1, zorder=3)
+    ax.set_xticks(x, [t.replace(" (macro)", "\n(macro)") for _, t in metrics], fontsize=9)
+    ax.set_ylim(0, 112)
+    ax.set_yticks(range(0, 101, 20))
+    ax.set_ylabel("%")
+    ax.grid(axis="y", color=GRID, lw=0.6)
+    ax.set_axisbelow(True)
+    ax.tick_params(axis="x", length=0)
+    handles, labels = ax.get_legend_handles_labels()
+    handles.append(plt.Line2D([], [], color=INK, ls="--", lw=1))
+    labels.append("FP32 level")
+    fig.legend(handles, labels, loc="outside lower center", ncol=5, frameon=False, fontsize=9)
+    f1 = [perf.loc[f"blocks{best}_seed{s}", "f1_macro"] * 100 for s in SEEDS]
+    mel = [perf.loc[f"blocks{best}_seed{s}", "melanoma_recall"] * 100 for s in SEEDS]
+    fig.suptitle(f"Seed check: {blocks_label(best)} fine-tuned with 3 seeds (seed = image order and augmentation)\n"
+                 f"Macro F1 {min(f1):.1f}–{max(f1):.1f} (FP32 {fp32[4]:.1f}): stable; melanoma recall "
+                 f"{min(mel):.1f}–{max(mel):.1f}: unstable. Same architecture, so same efficiency for every seed.",
+                 x=0.01, ha="left", fontsize=12, color=INK)
+    sc.save(fig, f"fig4_seeds_blocks{best}")
+
+
 def markdown(t1, t2, t3, best, order_note):
     def md(df):
         head = "| " + " | ".join(df.columns) + " |\n|" + "---|" * len(df.columns) + "\n"
@@ -238,6 +277,8 @@ run against FP32, so no CI or p-value exists for pruned − control.
   (macro), FP32 vs 1/2/3/4 blocks removed before fine-tuning.
 - `fig2_performance_fp32_vs_blocks_after_finetuning`: comparison 2, the same metrics after fine-tuning (seed 42).
 - `fig3_performance_control_vs_blocks{best}`: comparison 3, FP32 control vs {blocks_label(best)} by seed and mean.
+- `fig4_seeds_blocks{best}`: {blocks_label(best)}, seeds 42, 1 and 2 in one plot (performance metrics, FP32 level
+  dashed). All other figures use seed 42 only.
 - `fig_efficiency`: model size (file), FLOPs, latency, throughput, peak memory (the models before fine-tuning have the
   same architecture, so the same efficiency).
 - `fig_environment`: energy and CO2e per 1,000 images (CodeCarbon estimate).

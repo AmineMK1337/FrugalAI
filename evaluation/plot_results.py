@@ -35,10 +35,12 @@ PRUNED_COLORS = {10: "#f2c4a8", 20: "#e08a5c", 30: "#c25420", 40: "#7a2e0c"}  # 
 SPARSE_COLORS = {30: "#cfe3bf", 50: "#93bf73", 70: "#5b8a3a", 90: "#2f4f1c"}  # unstructured
 SPARSE_HATCHES = {30: "..", 50: "oo", 70: "\\\\", 90: "++"}
 PRUNED_HATCHES = {10: "..", 20: "//", 30: "xx", 40: "\\\\"}
+BLOCK_COLORS = {1: "#b8e0d8", 2: "#6fbfae", 3: "#2a8f7a", 4: "#14574a"}  # block (depth) pruning
+BLOCK_HATCHES = {1: "..", 2: "//", 3: "xx", 4: "\\\\"}
 
 
 def add_style(model):
-    """Styles for structured-pruning runs: pruned<ratio>_seed<s> and control_seed<s>."""
+    """Styles for pruning runs: pruned<ratio>_seed<s>, control_seed<s>, sparse<pct>_seed<s>, blocks<k>_seed<s>."""
     if model in STYLE:
         return
     seed = model.rsplit("_seed", 1)[-1]
@@ -53,6 +55,10 @@ def add_style(model):
         pct = int(model[len("sparse"):].split("_")[0])
         STYLE[model] = dict(label=f"Unstructured {pct}% (seed {seed})", short=f"Sparse\n{pct}% s{seed}",
                             color=SPARSE_COLORS.get(pct, "#5b8a3a"), hatch=SPARSE_HATCHES.get(pct, ".."))
+    elif model.startswith("blocks"):
+        k = int(model[len("blocks"):].split("_")[0])
+        STYLE[model] = dict(label=f"{k} block{'s' if k > 1 else ''} removed (seed {seed})", short=f"-{k} block\ns{seed}",
+                            color=BLOCK_COLORS.get(k, "#2a8f7a"), hatch=BLOCK_HATCHES.get(k, "//"))
     else:
         raise KeyError(f"no plot style for {model}")
 THREADS = (1, 4)
@@ -116,7 +122,12 @@ def grouped_by_thread(ax, table, prefix, fmt):
     ax.set_xticks(x, thread_labels())
     ax.grid(axis="x", visible=False)
     ax.margins(y=0.2)
-    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2, fontsize=9)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.1), ncol=legend_columns(), fontsize=9)
+
+
+def legend_columns():
+    """Legend under the plot: one row up to 4 models, else 3 per row (no lone entry on a second row)."""
+    return len(MODELS) if len(MODELS) <= 4 else 3
 
 
 def fp32_reference(ax, centers, values, half_width=0.42):
@@ -328,9 +339,9 @@ def comparison(split):
     ax.set_ylim(0, 118)
     ax.set_ylabel("Score (%), macro average except accuracy")
     ax.grid(axis="x", visible=False)
-    ax.set_title(f"Performance, all models ({FORMAT}, {split})", loc="left", pad=46)
-    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2, fontsize=9)
-    ax.text(0, -0.12, "Error bars: 95% bootstrap CI (1,000 resamples). Dashed line: FP32 level.",
+    ax.set_title(f"Performance, all models ({FORMAT}, {split})", loc="left")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.17), ncol=legend_columns(), fontsize=9)
+    ax.text(0, -0.13, "Error bars: 95% bootstrap CI (1,000 resamples). Dashed line: FP32 level.",
             transform=ax.transAxes, fontsize=8, color=NOTE)
     save(fig, out / "performance", "metrics_all_models", split)
 
@@ -366,7 +377,7 @@ def comparison(split):
         fig, ax = plt.subplots(figsize=(11, 4.8))
         grouped_by_thread(ax, table, prefix, fmt)
         ax.set_ylabel(ylabel)
-        ax.set_title(title, loc="left", pad=46)
+        ax.set_title(title, loc="left")
         if note:
             ax.text(0, -0.13, note, transform=ax.transAxes, fontsize=8, color=NOTE)
         save(fig, out / folder, name, split)

@@ -1,2 +1,2 @@
-model,format,size_mb,gflops,latency_median_ms_1t,latency_p95_ms_1t,throughput_img_s_1t,peak_memory_mb_1t,latency_median_ms_4t,latency_p95_ms_4t,throughput_img_s_4t,peak_memory_mb_4t,note
-fp32,fused + TorchScript,44.800907,3.644641294,50.73920206632465,51.258041767869145,21.061917320643346,76.80859375,14.608993078581989,14.817969221621752,76.06272495190167,78.0703125,FP32
+model,format,size_mb,gflops,params,weights_prunable,weights_zero,sparsity_pct,params_nonzero,state_dict_dense_mb,state_dict_gzip_mb,latency_median_ms_1t,latency_p95_ms_1t,throughput_img_s_1t,peak_memory_mb_1t,latency_median_ms_4t,latency_p95_ms_4t,throughput_img_s_4t,peak_memory_mb_4t,note
+fp32,fused + TorchScript,44.800907,3.644641294,11180103,11170496,0,0.0,11180103,44.798283,41.561612,50.70844548754394,51.342894649133086,20.833866786687466,77.265625,14.634779538027942,17.20203351578675,75.08449330316131,76.7265625,FP32

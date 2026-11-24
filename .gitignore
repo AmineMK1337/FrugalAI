@@ -36,3 +36,7 @@ wandb/
 emissions.csv
 *.log
 pruning/unstructured/models/
+
+# evaluate.py working folders (TemporaryDirectory); normally deleted, left behind if a run is killed
+evaluation/**/tmp*/
+pruning/**/evaluation/tmp*/
