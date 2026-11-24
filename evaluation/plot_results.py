@@ -35,12 +35,10 @@ PRUNED_COLORS = {10: "#f2c4a8", 20: "#e08a5c", 30: "#c25420", 40: "#7a2e0c"}  # 
 SPARSE_COLORS = {30: "#cfe3bf", 50: "#93bf73", 70: "#5b8a3a", 90: "#2f4f1c"}  # unstructured
 SPARSE_HATCHES = {30: "..", 50: "oo", 70: "\\\\", 90: "++"}
 PRUNED_HATCHES = {10: "..", 20: "//", 30: "xx", 40: "\\\\"}
-BLOCK_COLORS = {1: "#b8e0d8", 2: "#6fbfae", 3: "#2a8f7a", 4: "#14574a"}  # block (depth) pruning
-BLOCK_HATCHES = {1: "..", 2: "//", 3: "xx", 4: "\\\\"}
 
 
 def add_style(model):
-    """Styles for pruning runs: pruned<ratio>_seed<s>, control_seed<s>, sparse<pct>_seed<s>, blocks<k>_seed<s>."""
+    """Styles for pruning runs: pruned<ratio>_seed<s>, control_seed<s>, sparse<pct>_seed<s>."""
     if model in STYLE:
         return
     seed = model.rsplit("_seed", 1)[-1]
@@ -55,10 +53,6 @@ def add_style(model):
         pct = int(model[len("sparse"):].split("_")[0])
         STYLE[model] = dict(label=f"Unstructured {pct}% (seed {seed})", short=f"Sparse\n{pct}% s{seed}",
                             color=SPARSE_COLORS.get(pct, "#5b8a3a"), hatch=SPARSE_HATCHES.get(pct, ".."))
-    elif model.startswith("blocks"):
-        k = int(model[len("blocks"):].split("_")[0])
-        STYLE[model] = dict(label=f"{k} block{'s' if k > 1 else ''} removed (seed {seed})", short=f"-{k} block\ns{seed}",
-                            color=BLOCK_COLORS.get(k, "#2a8f7a"), hatch=BLOCK_HATCHES.get(k, "//"))
     else:
         raise KeyError(f"no plot style for {model}")
 THREADS = (1, 4)

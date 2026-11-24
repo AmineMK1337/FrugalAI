@@ -28,10 +28,6 @@ zeros. Storage columns for every model with FP32 weights: zeros and sparsity of 
 parameters, and the torch.save(state_dict) size dense and gzip-compressed (level 9):
   python evaluation/evaluate.py --models fp32 sparse50_seed42 ... --results-dir pruning/unstructured/results/evaluation
 
-Block pruning (pruning/structured/block/): blocks<k>_seed<s> are whole saved modules with k residual blocks replaced by
-nn.Identity (pruning/structured/block/models/<run>_selected.pt), fused and traced the same way:
-  python evaluation/evaluate.py --models fp32 blocks1_seed42 ... --results-dir pruning/structured/block/results/evaluation
-
 Usage: python evaluation/evaluate.py [--split validation|test] [--repeats 3] [--country TUN] [--models ...]
        [--results-dir DIR]
 Writes evaluation/results/<model>/<metric_type>/, evaluation/results/comparison/<metric_type>/ and
@@ -69,7 +65,6 @@ WEIGHT_ONLY = ROOT / "quantization" / "ptq" / "weight_only"
 QAT = ROOT / "quantization" / "qat"
 PRUNING = ROOT / "pruning" / "structured" / "filter"
 UNSTRUCTURED = ROOT / "pruning" / "unstructured"
-BLOCK = ROOT / "pruning" / "structured" / "block"
 RESULTS = HERE / "results"
 sys.path[:0] = [str(PROJECT / "src"), str(WEIGHT_ONLY)]
 LAUNCH_DIR = Path.cwd()  # relative --results-dir is taken from where the script is launched
@@ -166,12 +161,6 @@ for _path in sorted((UNSTRUCTURED / "models").glob("sparse*_selected.pt")):  # s
         state=None, module=saved_module(_path), unfused=saved_module(_path), file=_path,
         note=f"FP32, unstructured pruning (target {_name[6:].split('_')[0]}% of conv/linear weights set to zero), "
              "best validation macro F1 epoch")
-for _path in sorted((BLOCK / "models").glob("blocks*_selected.pt")):  # blocks<k>_seed<s>
-    _name = _path.name[:-len("_selected.pt")]
-    MODELS[_name] = dict(
-        state=None, module=saved_module(_path), unfused=saved_module(_path), file=_path,
-        note=f"FP32, block pruning ({_name[6:].split('_')[0]} residual block(s) removed), best validation macro F1 "
-             "epoch")
 
 def export_torchscript(workdir):
     """Path of each model's fused TorchScript file. Static PTQ and QAT already are one; the others are traced here."""
@@ -280,9 +269,9 @@ def check_against_earlier_results(overall):
     """Fusing changes only rounding, so performance must equal the results saved when the models were made
     (exactly for prediction-based metrics; AUC, which uses probabilities, up to 1e-4)."""
     tolerance = {m: 1e-9 for m in PERFORMANCE} | {"auc_macro": 1e-4}
-    for name in (n for n in MODELS if n.startswith(("pruned", "control", "sparse", "blocks"))):
+    for name in (n for n in MODELS if n.startswith(("pruned", "control", "sparse"))):
         # saved by prune.py from GPU logits: a prediction near a tie may flip on the CPU, so allow 2 images
-        source = UNSTRUCTURED if name.startswith("sparse") else BLOCK if name.startswith("blocks") else PRUNING
+        source = UNSTRUCTURED if name.startswith("sparse") else PRUNING
         saved = pd.read_csv(source / "results" / name / "metrics.csv")
         saved = saved[saved["stage"].str.startswith("selected")].iloc[0]
         diff = abs(overall[name]["accuracy"] - saved["accuracy"]) * overall[name]["n_images"]
@@ -568,9 +557,7 @@ def main(args):
             "qat": "saved fused INT8 TorchScript (torch.jit.script), loaded as is",
             "pruned / control": "whole saved FP32 module (pruning/structured/filter/models), fuse_model(), torch.jit.trace",
             "sparse": "whole saved FP32 module with exact zeros (pruning/unstructured/models), fuse_model(), "
-                      "torch.jit.trace; dense kernels",
-            "blocks": "whole saved FP32 module with residual blocks replaced by nn.Identity (pruning/structured/block/models), "
-                      "fuse_model(), torch.jit.trace"},
+                      "torch.jit.trace; dense kernels"},
         "models": list(MODELS),
         "fused_vs_unfused_check": fused_check.to_dict(orient="records"),
         "cpu": subprocess.run("lscpu | grep 'Model name'", shell=True, capture_output=True,

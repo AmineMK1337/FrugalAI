@@ -6,7 +6,7 @@
 - **Split:** fixed, by lesion (no lesion in two partitions), stratified by class, seed 42. Train 6,981 / validation 1,532 / test 1,502 images. **All results below are on the validation set.** The test set has not been used yet.
 - **Baseline (FP32):** ImageNet-pretrained ResNet-18 fine-tuned 25 epochs (Adam, lr 1e-4 with cosine decay, batch 32, class-weighted cross-entropy, strong augmentation: any-angle rotation, flips, random crops 60–100%, colour jitter). Validation macro F1 71.04, accuracy 82.18.
 - **Main metrics:** macro F1 and melanoma recall. Accuracy alone is misleading here, because predicting "nv" for every image already gives 66.45% accuracy.
-- **Goal:** make the model cheaper (size, latency, memory, energy) without losing macro F1 or melanoma recall. Pruning was tested in three forms, all in FP32 (no quantization): filter pruning and block (depth) pruning, which are structured, and unstructured weight pruning.
+- **Goal:** make the model cheaper (size, latency, memory, energy) without losing macro F1 or melanoma recall. Pruning was tested in two forms, both in FP32 (no quantization): structured filter pruning and unstructured weight pruning.
 
 ## 2. Evaluation protocol (same for every model)
 
@@ -14,10 +14,10 @@
 - **Performance:** accuracy, balanced accuracy (= macro recall), macro precision, macro specificity, macro F1, macro AUC, melanoma recall. 95% CIs by bootstrap (1,000 resamples). Change vs FP32: paired bootstrap, with CI and two-sided p-value.
 - **Latency:** batch 1, 30 warm-up + 200 timed runs, median. Measured at 1 thread (main protocol) and 4 threads. **Throughput:** batch 32. **Peak RAM:** increase in resident memory while loading the model and warming up.
 - **Energy:** CodeCarbon estimate (no hardware power counter on this VM; it assumes about 250 W per active thread, so energy ≈ run time × power). Comparisons only. Between identical architectures it varies by up to ±5%, so smaller differences are noise.
-- Each model runs in a fresh process, 3 interleaved repeats, median reported. Filter-pruned, block-pruned and unstructured models were evaluated in **three separate sessions**, each re-measuring FP32 as its own timing reference (FP32 latency 50.72–50.94 ms across the sessions).
+- Each model runs in a fresh process, 3 interleaved repeats, median reported. Filter-pruned and unstructured models were evaluated in **two separate sessions**, each re-measuring FP32 as its own timing reference (FP32 latency 50.72–50.94 ms across the sessions).
 - **FP32 control:** the unpruned FP32 model fine-tuned again with exactly the same 10-epoch recipe as the pruned models (seeds 42, 1, 2). Extra fine-tuning alone improves the model slightly, so "pruned − control" isolates the effect of pruning; "pruned − FP32" mixes pruning with extra training.
 
-## 3a. Structured filter pruning (removing whole filters)
+## 3. Structured filter pruning (removing whole filters)
 
 Code: `pruning/structured/filter/prune.py`.
 
@@ -29,17 +29,6 @@ Code: `pruning/structured/filter/prune.py`.
 5. Layers become physically smaller (fewer parameters and MACs).
 6. **Fine-tune 10 epochs:** class-weighted cross-entropy, strong augmentation, Adam, lr 1e-4 cosine, batch 32, seed 42. The best ratio (10%) and the control were repeated with seeds 1 and 2.
 7. Keep the epoch with the best validation macro F1.
-
-## 3b. Structured block pruning (removing whole residual blocks)
-
-Code: `pruning/structured/block/prune_blocks.py`.
-
-1. Start from the FP32 baseline.
-2. **Removable blocks:** ResNet-18 has 8 BasicBlocks; only the 5 with an identity shortcut can be removed (`layer1.0`, `layer1.1`, `layer2.1`, `layer3.1`, `layer4.1`). The first block of layer2/3/4 changes resolution and channels (downsample) and is kept. A removed block is replaced by `nn.Identity`, which exactly skips its residual branch.
-3. **Criterion:** each block alone is removed from the full model and the increase of the class-weighted cross-entropy is measured on 1,000 fixed train images. Least important first: `layer3.1` (+0.89), `layer2.1` (+1.04), `layer4.1` (+1.83), `layer1.0` (+5.08), `layer1.1` (+5.92).
-4. **Remove the k least important blocks**, k = 1, 2, 3, 4 (one-shot ranking). Each block removes the same compute (0.23 GMACs, 12.7%), but very different parameters: `layer4.1` alone holds 4.7 M of 11.2 M.
-5. **Fine-tune 10 epochs** with the same recipe as filter pruning, seed 42. The best configuration (1 block) was repeated with seeds 1 and 2.
-6. Keep the epoch with the best validation macro F1.
 
 ## 4. Unstructured pruning (zeroing individual weights)
 
@@ -62,16 +51,12 @@ Pruning is deterministic, so these numbers are the same for every seed. All valu
 | Filter 20% | 59.07 | 19.69 | 16.23 | 89.05 | 16.74 | 62.15 | 6.94 | 58.1 |
 | Filter 30% | 64.95 | 14.04 | 9.90 | 85.65 | 11.44 | 49.72 | 0.00 | 61.6 |
 | Filter 40% | 66.45 | 14.29 | 9.49 | 85.71 | 11.41 | 53.66 | 0.00 | 62.3 |
-| Block, 1 removed | 68.47 | 55.22 | 66.69 | 94.43 | 51.02 | 87.65 | 73.41 | 75.7 |
-| Block, 2 removed | 61.10 | 33.89 | 51.20 | 91.44 | 33.67 | 75.92 | 76.88 | 61.9 |
-| Block, 3 removed | 66.45 | 14.29 | 9.49 | 85.71 | 11.41 | 68.94 | 0.00 | 62.3 |
-| Block, 4 removed | 66.45 | 14.29 | 9.49 | 85.71 | 11.41 | 51.74 | 0.00 | 62.3 |
 | Unstructured 30% | 83.49 | 72.18 | 73.35 | 96.41 | 72.25 | 96.35 | 63.01 | 96.4 |
 | Unstructured 50% | 84.20 | 66.20 | 79.27 | 95.71 | 71.16 | 96.01 | 60.69 | 90.6 |
 | Unstructured 70% | 78.33 | 37.76 | 70.42 | 92.42 | 43.63 | 93.94 | 47.40 | 77.1 |
 | Unstructured 90% | 66.45 | 14.29 | 9.49 | 85.71 | 11.41 | 60.67 | 0.00 | 62.3 |
 
-All values come from the CPU evaluation (fused + TorchScript). The filter-pruned models before fine-tuning were rebuilt with the training script's deterministic pruning; the block-pruned ones were saved by the training script.
+All values come from the CPU evaluation (fused + TorchScript). The filter-pruned models before fine-tuning were rebuilt with the training script's deterministic pruning.
 
 **Note on unstructured 30–50% before fine-tuning:** accuracy goes up (83.5% and 84.2% vs 82.2%) even though no training happened. The non-zero weights were verified to be bit-identical to FP32. The cause is a shift toward the majority class: the baseline, trained with class-weighted loss, over-predicts rare classes (e.g. "mel" 204 times for 173 true melanomas), and pruning partly undoes this bias. At 50%, "nv" is predicted 1,060 times instead of 955: 60 more correct nv images and 31 fewer correct rare-class images. Accuracy rises, but balanced accuracy (−5.3, significant) and melanoma recall (−5.8, significant) fall. At 30%, melanoma recall falls by 3.5 points (significant) while macro F1 is unchanged.
 
@@ -91,12 +76,6 @@ Pruned − control is the macro F1 difference with the FP32 control of the same 
 | Filter 20%, seed 42 | 78.98 | 68.67 | 69.00 | 95.79 | 67.25 | 95.57 | 72.25 | −3.79 (−7.64 to +0.23), p=0.06 | −5.40 |
 | Filter 30%, seed 42 | 76.70 | 67.03 | 61.78 | 95.54 | 63.25 | 94.54 | 73.41 | −7.80 (−12.00 to −3.58), p=0.004 | −9.40 |
 | Filter 40%, seed 42 | 73.17 | 66.88 | 58.03 | 95.10 | 60.66 | 92.83 | 61.85 | −10.39 (−14.25 to −6.64), p<0.001 | −11.99 |
-| Block 1, seed 42 | 82.51 | 73.04 | 68.85 | 96.02 | 70.65 | 96.22 | 56.65 | −0.40 (−4.52 to +3.50), p=0.91 | −2.00 |
-| Block 1, seed 1 | 81.72 | 71.09 | 70.81 | 96.22 | 70.20 | 95.96 | 69.94 | −0.84 (−4.29 to +2.80), p=0.60 | −2.99 |
-| Block 1, seed 2 | 82.77 | 72.16 | 73.88 | 96.15 | 72.18 | 96.59 | 71.10 | +1.14 (−2.43 to +5.04), p=0.52 | +1.20 |
-| Block 2, seed 42 | 81.53 | 70.36 | 72.14 | 96.16 | 70.13 | 96.60 | 75.72 | −0.92 (−3.56 to +1.57), p=0.51 | −2.52 |
-| Block 3, seed 42 | 75.52 | 71.87 | 62.81 | 95.44 | 65.16 | 93.68 | 58.96 | −5.88 (−10.13 to −1.43), p=0.010 | −7.49 |
-| Block 4, seed 42 | 74.74 | 70.08 | 58.37 | 95.29 | 62.48 | 93.61 | 70.52 | −8.56 (−12.62 to −4.59), p<0.001 | −10.17 |
 | Unstructured 30%, seed 42 | 82.77 | 72.57 | 73.64 | 96.09 | 72.37 | 96.17 | 69.94 | +1.33 (−2.36 to +5.26), p=0.49 | −0.28 |
 | Unstructured 50%, seed 42 | 81.98 | 74.91 | 72.06 | 96.21 | 72.76 | 95.97 | 63.58 | +1.71 (−1.54 to +5.14), p=0.28 | +0.11 |
 | Unstructured 70%, seed 42 | 82.90 | 76.15 | 75.75 | 96.36 | 75.51 | 96.37 | 70.52 | +4.46 (+1.00 to +8.22), p=0.014 | +2.86 |
@@ -107,7 +86,6 @@ Pruned − control is the macro F1 difference with the FP32 control of the same 
 **Three-seed summaries (macro F1):**
 - FP32 control: mean 72.27 (70.98–73.19).
 - Filter 10%: mean 70.39 (69.42–71.41); pruned − control mean −1.89 (−3.78 to +0.43, sign changes with seed).
-- Block 1 (layer3.1 removed): mean 71.01 (70.20–72.18); pruned − control mean −1.26 (−2.99 to +1.20, sign changes with seed). Melanoma recall mean 65.90 (56.65–71.10) vs control mean 70.52.
 - Unstructured 70%: mean 74.02 (71.90–75.51); pruned − control mean +1.75 (+0.92 to +2.86, same sign on all seeds). Melanoma recall mean 69.36 vs control mean 70.52.
 
 ## 7. Results after fine-tuning: efficiency (CPU)
@@ -129,19 +107,7 @@ GMACs per image. Latency in ms (median, batch 1). Throughput at batch 32, 1 thre
 | Filter 30%, seed 42 | 5.52 M (−51%) | 1.06 (−42%) | 22.15 | 36.80 (37.76) | 11.66 | 1.38 / 1.25 | 30.0 | 56.1 (−28%) | 2.34 (−31%) | 1.32 |
 | Filter 40%, seed 42 | 4.07 M (−64%) | 0.85 (−53%) | 16.37 | 31.92 (32.81) | 10.43 | 1.60 / 1.40 | 32.2 | 50.9 (−35%) | 2.15 (−37%) | 1.21 |
 
-**Session B: block pruning** (`pruning/structured/block/results/evaluation/`)
-
-| Model | Params | GMACs | File size (MB) | Latency 1 thread (p95) | Latency 4 threads | Speed-up 1 / 4 threads | Throughput (img/s) | Peak RAM (MB) | Energy (Wh / 1,000 img) | CO₂e (g / 1,000 img) |
-|---|---|---|---|---|---|---|---|---|---|---|
-| FP32 baseline | 11.18 M | 1.82 | 44.80 | 50.88 (51.62) | 14.63 | 1.00 / 1.00 | 20.8 | 77.7 | 3.39 | 1.91 |
-| Block 1, seed 42 | 10.00 M (−11%) | 1.59 (−13%) | 40.08 | 45.31 (45.84) | 13.33 | 1.12 / 1.10 | 23.4 | 71.6 (−8%) | 3.02 (−11%) | 1.71 |
-| Block 1, seed 1 | 10.00 M | 1.59 | 40.08 | 45.73 (46.45) | 12.98 | 1.11 / 1.13 | 23.3 | 73.6 (−5%) | 2.97 (−12%) | 1.67 |
-| Block 1, seed 2 | 10.00 M | 1.59 | 40.08 | 45.72 (46.40) | 13.05 | 1.11 / 1.12 | 23.0 | 73.0 (−6%) | 3.11 (−8%) | 1.75 |
-| Block 2, seed 42 | 9.70 M (−13%) | 1.36 (−25%) | 38.90 | 40.79 (41.35) | 11.77 | 1.25 / 1.24 | 26.1 | 70.4 (−9%) | 2.70 (−20%) | 1.52 |
-| Block 3, seed 42 | 4.98 M (−55%) | 1.13 (−38%) | 20.00 | 33.66 (34.35) | 9.64 | 1.51 / 1.52 | 29.8 | 52.3 (−33%) | 2.37 (−30%) | 1.33 |
-| Block 4, seed 42 | 4.91 M (−56%) | 0.90 (−51%) | 19.70 | 28.09 (29.53) | 8.22 | 1.81 / 1.78 | 34.2 | 51.4 (−34%) | 2.05 (−39%) | 1.16 |
-
-**Session C: unstructured pruning** (`pruning/unstructured/results/evaluation/`) (every model: 11.18 M parameters in total, 1.82 GMACs, 44.8 MB file; compressed size = `state_dict` gzip level 9)
+**Session B: unstructured pruning** (`pruning/unstructured/results/evaluation/`) (every model: 11.18 M parameters in total, 1.82 GMACs, 44.8 MB file; compressed size = `state_dict` gzip level 9)
 
 | Model | Non-zero params | Sparsity | Compressed size (MB) | Latency 1 thread (p95) | Latency 4 threads | Speed-up 1 / 4 threads | Throughput (img/s) | Peak RAM (MB) | Energy (Wh / 1,000 img) | CO₂e (g / 1,000 img) |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -162,29 +128,27 @@ For reference, FP32 compressed with gzip is 41.56 MB, so unstructured pruning sa
 
 ## 9. Main findings
 
-1. **Fine-tuning is essential for structured pruning.** Right after pruning, even 10% of filters drops macro F1 from 71.0 to 38.0, and removing one block drops it to 51.0; at 30–40% of filters or 3–4 blocks, the model predicts "nv" for nearly every image. Ten epochs recover most of the loss.
+1. **Fine-tuning is essential for structured pruning.** Right after pruning, even 10% of filters drops macro F1 from 71.0 to 38.0; at 30–40% the model predicts "nv" for nearly every image. Ten epochs recover most of the loss.
 2. **Filter 10% is close to free vs FP32** (mean −0.65 macro F1 over 3 seeds, none significant), but **about −1.9 vs its control** (sign changes with seed, so not established). From 20%, the loss grows with the ratio and is significant from 30% (−7.8 at 30%, −10.4 at 40%).
 3. **Filter-pruning speed-up is smaller than the compute reduction:** GMACs −16 to −53%, latency only −6 to −37% (1.07–1.60× at 1 thread). layer1 (highest resolution) is only half prunable because its residual stream is protected.
-4. **Block pruning gives a better accuracy/speed trade-off than filter pruning.** Latency follows the compute cut almost proportionally (1.12×, 1.25×, 1.51×, 1.81× for 1–4 blocks). 1 block: macro F1 71.01 over 3 seeds (−0.03 vs FP32, −1.26 vs control, sign changes by seed). 2 blocks: −0.92, not significant. Removing `layer4.1` (3rd block) halves parameters and file size but costs −5.9 points (significant). At similar speed, block pruning keeps more macro F1 than filter pruning: 1 block 71.0 at 1.12× vs filter 10% 70.4 at 1.07×; 3 blocks 65.2 at 1.51× vs filter 30% 63.3 at 1.38× and 40% 60.7 at 1.60×.
-5. **Unstructured pruning keeps accuracy at much higher ratios.** Up to 30%, macro F1 is unchanged even without fine-tuning (though melanoma recall drops 3.5 points). After fine-tuning, every ratio up to 90% is at or above FP32 on macro F1.
-6. **Unstructured 70% over 3 seeds:** macro F1 74.02 (+3.0 vs FP32, significant for seed 42 only), +1.75 vs control on average with the same sign on all seeds. The gain is about the size of the seed-to-seed spread (about 2 points), so it is "no loss, possibly a small gain". Melanoma recall does not improve vs the control (−1.2 on average).
-7. **Unstructured pruning gives no runtime benefit** on this CPU with PyTorch dense kernels: latency, RAM and energy are within noise of FP32. The only gain is compressed storage (2.6× smaller at 70%, 5.7× at 90%).
-8. **Melanoma recall is unstable:** it moves by up to 6 points between seeds of the same model (14.5 points for the 1-block model), and much of the rise seen after pruning comes from the extra fine-tuning (the controls rise too).
-9. **For this model on this CPU, INT8 quantization (static PTQ or QAT) dominates all three pruning methods** on speed and size with no accuracy loss. Pruning and quantization can be combined (the pruned models keep the quantizable architecture).
+4. **Unstructured pruning keeps accuracy at much higher ratios.** Up to 30%, macro F1 is unchanged even without fine-tuning (though melanoma recall drops 3.5 points). After fine-tuning, every ratio up to 90% is at or above FP32 on macro F1.
+5. **Unstructured 70% over 3 seeds:** macro F1 74.02 (+3.0 vs FP32, significant for seed 42 only), +1.75 vs control on average with the same sign on all seeds. The gain is about the size of the seed-to-seed spread (about 2 points), so it is "no loss, possibly a small gain". Melanoma recall does not improve vs the control (−1.2 on average).
+6. **Unstructured pruning gives no runtime benefit** on this CPU with PyTorch dense kernels: latency, RAM and energy are within noise of FP32. The only gain is compressed storage (2.6× smaller at 70%, 5.7× at 90%).
+7. **Melanoma recall is unstable:** it moves by up to 6 points between seeds of the same model, and much of the rise seen after pruning comes from the extra fine-tuning (the controls rise too).
+8. **For this model on this CPU, INT8 quantization (static PTQ or QAT) dominates both pruning methods** on speed and size with no accuracy loss. Pruning and quantization can be combined (the pruned models keep the quantizable architecture).
 
 ## 10. Limitations
 
 - All results are on the validation set, which was also used to choose the ratio and the epoch (best macro F1), so the selected scores are slightly optimistic. The held-out test set has not been used yet.
 - Only the best ratio of each method has 3 seeds; the other ratios have 1 seed.
 - Energy is an estimate (time × assumed power), not a measurement.
-- Filter, block and unstructured results come from three evaluation sessions; FP32 latency differs by at most 0.2 ms between them.
-- Block pruning removes blocks in a fixed order ranked once on the full model (not re-ranked after each removal); melanoma recall of the 1-block model varies from 56.7 to 71.1 across seeds.
+- Filter-pruning and unstructured results come from two evaluation sessions; FP32 latency differs by at most 0.2 ms between them.
 - Fine-tuning was limited to 10 epochs; most structured models were still improving at epochs 9–10.
 - Filter pruning used a uniform per-layer ratio and the L1 filter criterion only; unstructured used global magnitude only (no iterative pruning, no other criteria).
 
 ## 11. Possible next steps
 
-- Combine pruning and INT8 quantization (block or filter pruning + INT8 for speed, unstructured sparsity + INT8 for compressed size).
+- Combine pruning and INT8 quantization (structured pruning + INT8 for speed, unstructured sparsity + INT8 for compressed size).
 - Longer fine-tuning after structured pruning; iterative or non-uniform pruning.
 - Sparse kernels or hardware that skip zeros, to turn unstructured sparsity into speed.
 - Final single evaluation of all chosen models on the test set.

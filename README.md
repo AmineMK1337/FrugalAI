@@ -1,6 +1,6 @@
 # FrugalAI
 
-Skin-lesion classification on HAM 10000 with a fine-tuned ResNet-18. This page summarizes the work so far: the data split, fine-tuning, and the evaluation of the FP32 baseline against its INT8 versions: weight-only quantization, per-channel and per-tensor ([quantization/ptq/weight_only/](quantization/ptq/weight_only/)), static post-training quantization ([quantization/ptq/static/](quantization/ptq/static/)), and quantization-aware training ([quantization/qat/](quantization/qat/)), plus pruning in FP32: structured filter pruning ([pruning/structured/filter/](pruning/structured/filter/)), structured block pruning ([pruning/structured/block/](pruning/structured/block/)) and unstructured weight pruning ([pruning/unstructured/](pruning/unstructured/)).
+Skin-lesion classification on HAM 10000 with a fine-tuned ResNet-18. This page summarizes the work so far: the data split, fine-tuning, and the evaluation of the FP32 baseline against its INT8 versions: weight-only quantization, per-channel and per-tensor ([quantization/ptq/weight_only/](quantization/ptq/weight_only/)), static post-training quantization ([quantization/ptq/static/](quantization/ptq/static/)), and quantization-aware training ([quantization/qat/](quantization/qat/)), plus pruning in FP32: structured filter pruning ([pruning/structured/filter/](pruning/structured/filter/)) and unstructured weight pruning ([pruning/unstructured/](pruning/unstructured/)).
 
 ## 1. Dataset
 
@@ -178,10 +178,6 @@ From 32 down to 16 bits nothing changes: the predictions are 100% identical to F
 
 ## 8. Structured pruning (FP32)
 
-Structured pruning removes whole parts of the network, so the model becomes physically smaller and faster. Two granularities are tested, both one-shot (prune once, then fine-tune 10 epochs) and both compared with the same FP32 controls: **filter pruning** (8.1) makes every layer narrower; **block pruning** (8.2) removes whole residual blocks, so the network becomes shallower.
-
-### 8.1 Filter pruning
-
 [pruning/structured/filter/prune.py](pruning/structured/filter/prune.py) removes whole filters (output channels) from the convolutions, so the layers become physically smaller. Weights stay FP32; there is no quantization and no unstructured pruning. Data roles: train split = fine-tuning; validation split = choosing ratios and epochs; the test set is not used.
 
 **How a pruned model is made** (diagram and measured macro F1 at each stage: [pruning_process.png](pruning/structured/filter/results/report/pruning_process.png)):
@@ -202,7 +198,7 @@ Structured pruning removes whole parts of the network, so the model becomes phys
 
 Settings: [settings.json](pruning/structured/filter/results/settings.json), with a copy in each run's `summary.json`. Per-layer channels before/after: `pruning/structured/filter/results/<run>/layers.csv`.
 
-#### Results (validation set)
+### Results (validation set)
 
 All models were evaluated in one session by evaluate.py (CPU, fused + TorchScript; latency at 1 thread), FP32 included as the timing reference: [pruning/structured/filter/results/evaluation/](pruning/structured/filter/results/evaluation/). Change vs FP32: paired bootstrap, 95% CI. Energy is an estimate, about run time × an assumed power. Between models with the same architecture (FP32 and the three controls) it varies by up to ±5%, so only larger differences are meaningful.
 
@@ -241,7 +237,7 @@ Pruned − control above uses each model's selected epoch (CPU evaluation). At e
 - **Melanoma recall** rises at 10% (+5.6 points vs FP32 on average), but the control rises too (+4.1), so most of it comes from the extra fine-tuning, not from pruning (pruned − control +1.5, with the sign changing by seed). Macro F1 falls at the same time, and the per-seed values vary by 6 points.
 - **Compared with INT8 quantization** (section 7, a different evaluation session): static PTQ and QAT are 7.4–7.5× faster and 4× smaller with no significant loss of macro F1 (static PTQ needs no training at all). Pruning gives 1.07× at 10% and 1.6× (2.7× smaller) at 40% with −10 points. For this model on this CPU, quantization is the far better trade-off. The two can also be combined: the pruned models keep the quantizable architecture.
 
-#### Three comparisons
+### Three comparisons
 
 [pruning/structured/filter/comparisons.py](pruning/structured/filter/comparisons.py) presents the results as three comparisons, each with a table (PDF, PNG, CSV) and a figure, plus one efficiency and one environment figure: [pruning/structured/filter/results/comparaison/](pruning/structured/filter/results/comparaison/). Nothing is retrained. The pruned models before fine-tuning were not saved by prune.py, so the script rebuilds them with prune.py's own deterministic pruning (parameter count and prune.py's logged accuracy are checked) and evaluates them like evaluate.py, with a paired bootstrap against FP32.
 
@@ -250,54 +246,6 @@ Pruned − control above uses each model's selected epoch (CPU evaluation). At e
 3. **FP32 control vs pruned 10%, after fine-tuning, matched by seed:** the effect of pruning alone, with the extra 10 epochs of fine-tuning removed. This is the fairest comparison.
 
 Every table gives accuracy, balanced accuracy, macro precision, specificity, F1 and AUC, and melanoma recall, as value, absolute difference and relative change. The figures show the metrics of the evaluation protocol (performance, efficiency, environment). The models before fine-tuning have the same architecture as after, so the efficiency and environment figures cover both.
-
-### 8.2 Block pruning
-
-[pruning/structured/block/prune_blocks.py](pruning/structured/block/prune_blocks.py) removes whole residual blocks (depth pruning). The remaining layers keep their full width. Weights stay FP32. Data roles: train split = block ranking and fine-tuning; validation split = choosing the number of blocks and the epoch; the test set is not used.
-
-**How a block-pruned model is made:**
-
-1. **Start from the FP32 baseline**, loaded (`strict=True`) into `torchvision.models.quantization.resnet18(quantize=False)`, as for filter pruning.
-2. **Removable blocks.** ResNet-18 has 8 BasicBlocks. Only the 5 whose shortcut is the identity can be removed: `layer1.0`, `layer1.1`, `layer2.1`, `layer3.1`, `layer4.1`. The first block of layer2, layer3 and layer4 changes the resolution and the channel count (downsample shortcut) and is kept. A removed block is replaced by `nn.Identity`: a BasicBlock computes relu(x + F(x)) and x is already non-negative, so this exactly skips the residual branch F.
-3. **Rank the blocks once, on the full model.** Each removable block alone is replaced by the identity, and the increase of the class-weighted cross-entropy is measured on 1,000 fixed train images (seed 42, evaluation preprocessing): [block_importance.csv](pruning/structured/block/results/block_importance.csv). Least important first: `layer3.1` (+0.89), `layer2.1` (+1.04), `layer4.1` (+1.83), `layer1.0` (+5.08), `layer1.1` (+5.92). The two layer1 blocks, at the highest resolution, are essential.
-4. **Remove the k least important blocks**, k = 1, 2, 3, 4 (one-shot: the ranking is not recomputed after each removal). Every block costs the same compute (−12.7% of the MACs), but very different parameters: `layer4.1` alone holds 4.7 M of the 11.2 M parameters.
-5. **Fine-tune** with exactly the same settings as filter pruning and the FP32 control (class-weighted cross-entropy, strong augmentation, Adam, lr 1e-4 with cosine decay over 10 epochs, batch 32), seed 42. The best configuration (1 block) is repeated with seeds 1 and 2.
-6. **Select** the epoch with the best validation macro F1 (epoch 10 also reported), and **evaluate** with the shared protocol (section 5): [pruning/structured/block/results/evaluation/](pruning/structured/block/results/evaluation/). Three comparisons, as for filter pruning: [pruning/structured/block/results/comparisons/](pruning/structured/block/results/comparisons/), made by [comparisons.py](pruning/structured/block/comparisons.py).
-
-Settings: [settings.json](pruning/structured/block/results/settings.json). Per run: `pruning/structured/block/results/<run>/summary.json` (blocks removed, parameters, GMACs, metrics at each stage).
-
-#### Results (validation set)
-
-All models were evaluated in one session by evaluate.py (CPU, fused + TorchScript), FP32 included as the timing reference: [pruning/structured/block/results/evaluation/](pruning/structured/block/results/evaluation/). Change vs FP32: paired bootstrap, 95% CI. Energy is an estimate (about run time × an assumed power).
-
-| Model | Blocks removed | Params | GMACs | Macro F1 right after pruning | Macro F1 after fine-tuning (epoch) | Change vs FP32 (95% CI) | Melanoma recall | Latency (ms), 1 / 4 threads | Size (MB) | Peak RAM vs FP32 | Energy vs FP32 |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| FP32 baseline | – | 11.18 M | 1.82 | – | 71.04 | – | 66.47 | 50.88 / 14.63 | 44.8 | – | – |
-| 1 block, seed 42 | layer3.1 | 10.00 M (−11%) | 1.59 (−13%) | 51.02 | 70.65 (5) | −0.40 (−4.52 to +3.50) | 56.65 | 45.31 / 13.33 (1.12×) | 40.1 | −8% | −11% |
-| 1 block, seed 1 | layer3.1 | 10.00 M | 1.59 | 51.02 | 70.20 (10) | −0.84 (−4.29 to +2.80) | 69.94 | 45.73 / 12.98 (1.11×) | 40.1 | −5% | −12% |
-| 1 block, seed 2 | layer3.1 | 10.00 M | 1.59 | 51.02 | 72.18 (9) | +1.14 (−2.43 to +5.04) | 71.10 | 45.72 / 13.05 (1.11×) | 40.1 | −6% | −8% |
-| 2 blocks, seed 42 | + layer2.1 | 9.70 M (−13%) | 1.36 (−25%) | 33.67 | 70.13 (10) | −0.92 (−3.56 to +1.57) | 75.72 | 40.79 / 11.77 (1.25×) | 38.9 | −9% | −20% |
-| 3 blocks, seed 42 | + layer4.1 | 4.98 M (−55%) | 1.13 (−38%) | 11.41 | 65.16 (7) | −5.88 (−10.13 to −1.43) | 58.96 | 33.66 / 9.64 (1.51×) | 20.0 | −33% | −30% |
-| 4 blocks, seed 42 | + layer1.0 | 4.91 M (−56%) | 0.90 (−51%) | 11.41 | 62.48 (10) | −8.56 (−12.62 to −4.59) | 70.52 | 28.09 / 8.22 (1.81×) | 19.7 | −34% | −39% |
-
-"Right after pruning" is the CPU evaluation of the saved models before fine-tuning (block removal is deterministic, so it is the same for every seed). Three comparisons (tables and figures): [pruning/structured/block/results/comparisons/](pruning/structured/block/results/comparisons/). All plots show seed 42 only; seeds 42, 1 and 2 of the 1-block model are compared in one figure, `fig4_seeds_blocks1` (their metrics are also in the evaluation tables).
-
-**Best configuration on validation (1 block), 3 seeds:**
-
-| | FP32 | FP32 control, mean (min–max) | 1 block removed, mean (min–max) | Pruned − control, by seed 42 / 1 / 2 (mean) |
-|---|---|---|---|---|
-| Macro F1 | 71.04 | 72.27 (70.98–73.19) | 71.01 (70.20–72.18) | −2.00 / −2.99 / +1.20 (−1.26) |
-| Balanced accuracy | 71.50 | 73.03 (71.85–74.26) | 72.10 (71.09–73.04) | +0.07 / −3.17 / +0.31 (−0.93) |
-| Melanoma recall | 66.47 | 70.52 (69.94–71.10) | 65.90 (56.65–71.10) | −14.45 / +0.00 / +0.58 (−4.62) |
-| Accuracy | 82.18 | 82.35 (81.79–82.70) | 82.33 (81.72–82.77) | −0.20 / −0.85 / +0.98 (−0.02) |
-
-- **Fine-tuning is essential here too.** Right after removal, macro F1 falls to 51 (1 block), 34 (2 blocks) and 11 (3–4 blocks: the model predicts "nv" for every image). Ten epochs recover almost everything for 1–2 blocks.
-- **1 or 2 blocks are nearly free compared with the original model.** 1 block: macro F1 71.01 on average over 3 seeds vs 71.04 for FP32; no seed's difference is significant. 2 blocks: −0.92, not significant. Compared with the control, 1 block costs −1.3 points on average, with the sign changing by seed, so it is not established.
-- **Removing `layer4.1` (3rd block) is a step.** It halves the parameters and the file size (4.7 M parameters in one block), but macro F1 drops by 5.9 points (significant). The 4th block (`layer1.0`) costs another 2.7 points.
-- **Speed-up follows the compute cut more closely than with filter pruning.** Each block removes the same 0.46 GFLOPs (12.7%), and latency falls almost proportionally: 1.12×, 1.25×, 1.51×, 1.81× at 1 thread. Whole layers disappear, so there are fewer kernel launches, not just narrower ones.
-- **Better trade-off than filter pruning on this model.** At a similar speed, block pruning keeps more accuracy: 1 block (1.12×, F1 71.0 over 3 seeds) vs filter 10% (1.07×, 70.4); 3 blocks (1.51×, 65.2) vs filter 30% (1.38×, 63.3) and 40% (1.60×, 60.7). Filter pruning saves more parameters at low ratios, but parameters are not what limits speed here.
-- **Melanoma recall is unstable for 1 block** (56.7 to 71.1 across seeds), so this configuration's melanoma behaviour needs more seeds before any conclusion.
-- **Still far behind INT8 quantization** (section 7: static PTQ and QAT are 7.4–7.5× faster, 4× smaller, no significant loss). The block-pruned models keep the quantizable architecture, so block pruning + INT8 can be combined.
 
 ## 9. Unstructured pruning (FP32)
 
@@ -352,9 +300,9 @@ Pruned − control above uses each model's selected epoch (CPU evaluation). At e
 ## Next steps
 
 - Paired bootstrap of each pruned model against its control (inference only), to give pruned − control a confidence interval (the "not available" cells of comparison 3).
-- Quantize the pruned models to combine both techniques: block pruning (1–2 blocks) or filter pruning + static INT8 PTQ for speed (no extra training needed), unstructured sparsity + INT8 for compressed size.
+- Quantize the pruned models to combine both techniques: filter pruning + static INT8 PTQ for speed (no extra training needed), unstructured sparsity + INT8 for compressed size.
 - Longer fine-tuning after structured pruning; iterative pruning (prune a little, fine-tune, repeat) instead of one-shot.
-- More seeds for the melanoma recall of the 1-block model and of QAT (both vary a lot between runs).
+- More seeds for the melanoma recall of QAT (it varies a lot between epochs).
 - Once every model is final, evaluate all of them once on the held-out test set (`python evaluation/evaluate.py --split test`).
 
 ## Reproduce
