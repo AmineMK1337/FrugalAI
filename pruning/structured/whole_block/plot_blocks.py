@@ -1,6 +1,8 @@
 """Figures of whole-block pruning (stage 1), validation split only. Reads the CSV / JSON results; no model is run.
 
-  fig01_ranking_steps        greedy ranking, subset seed 42: loss increase of every candidate at every step
+  fig01_ranking_steps        how the blocks were chosen: block x step grid of removal costs (cheapest removed), and
+                             the subset macro F1 after each removal
+  fig01b_ranking_steps_detail  the same ranking as bar charts per step, with the subset macro F1 of every candidate
   fig02_ranking_seeds        single-removal loss increase and removal position, subset seeds 42 and 1, one plot
   fig03_bn_recalibration     single-removal loss with and without BatchNorm recalibration
   fig04_taylor_vs_loss       first-order Taylor score (logged only) against the loss increase used for selection
@@ -110,6 +112,75 @@ def old_results(seed):
 
 # ── Ranking ──────────────────────────────────────────────────────────────────
 
+def fig_ranking_simple(seed):
+    """Left: grid block x step, each cell = cost of removing that block at that step (read a column top to bottom,
+    the cheapest is removed). Right: the subset macro F1 of the model after each removal."""
+    from matplotlib.colors import LinearSegmentedColormap
+    from matplotlib.patches import Rectangle
+    table = pd.read_csv(SELECTION / f"ranking_seed{seed}.csv")
+    full = table[table["step"] == 0].iloc[0]
+    table = table[table["step"] > 0]
+    chosen = table[table["chosen"] == True].sort_values("step")  # noqa: E712
+    order, steps = chosen["candidate"].tolist(), sorted(table["step"].unique())
+    cost = table.pivot(index="candidate", columns="step", values="loss_increase").reindex(order)
+    cmap = LinearSegmentedColormap.from_list("blues", ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf",
+                                                       "#184f95", "#0d366b"])
+    vmax = float(np.nanmax(cost.values))
+
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(14, 5.2), gridspec_kw=dict(width_ratios=[1.15, 1], wspace=0.28))
+    ax.imshow(np.ma.masked_invalid(cost.values), cmap=cmap, vmin=0, vmax=vmax, aspect="auto")
+    for i, block in enumerate(order):
+        for j, step in enumerate(steps):
+            value = cost.loc[block, step]
+            if np.isnan(value):  # already removed at an earlier step
+                ax.add_patch(Rectangle((j - 0.5, i - 0.5), 1, 1, facecolor="#f3f2ee", edgecolor="white", lw=2))
+                ax.text(j, i, "removed", ha="center", va="center", fontsize=8.5, color=MUTED)
+                continue
+            dark = value / vmax > 0.45
+            ax.add_patch(Rectangle((j - 0.5, i - 0.5), 1, 1, fill=False, edgecolor="white", lw=2))
+            if block == order[j]:
+                ax.add_patch(Rectangle((j - 0.44, i - 0.44), 0.88, 0.88, fill=False, edgecolor="#eb6834", lw=3))
+                ax.text(j, i - 0.13, f"+{value:.2f}", ha="center", va="center", fontsize=11, fontweight="bold",
+                        color="white" if dark else INK)
+                ax.text(j, i + 0.2, "✓ remove", ha="center", va="center", fontsize=8.5, fontweight="bold",
+                        color="white" if dark else INK)
+            else:
+                ax.text(j, i, f"+{value:.2f}", ha="center", va="center", fontsize=10,
+                        color="white" if dark else INK)
+    ax.set_xticks(range(len(steps)), [f"Step {s}" for s in steps])
+    ax.set_yticks(range(len(order)), order)
+    ax.xaxis.tick_top()
+    ax.tick_params(length=0)
+    ax.grid(False)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.set_title("How much the loss goes up if this block is removed now\n(lighter = cheaper to remove; "
+                 "orange box = cheapest, removed)", loc="left", fontsize=10.5, pad=28)
+
+    k = list(range(len(order) + 1))
+    f1 = [full["f1_macro"]] + chosen["f1_macro"].tolist()
+    ax2.plot(k, f1, color="#2a78d6", lw=2.5, marker="o", ms=8, markeredgecolor="white", markeredgewidth=1.5,
+             zorder=3)
+    for x, y in zip(k, f1):
+        ax2.text(x, y + 0.035, f"{y:.2f}", ha="center", fontsize=9, color=INK)
+    floor = chosen["f1_macro"].iloc[-1]
+    ax2.axhline(floor, color=MUTED, ls=":", lw=1.2)
+    ax2.text(len(order), floor - 0.05, "predicts 'nv' for every image", ha="right", va="top", fontsize=8.5,
+             color=NOTE)
+    ax2.set_xticks(k, ["none\n(full model)"] + [f"+ {b}" for b in order], fontsize=9)
+    ax2.set_ylim(0, 1)
+    ax2.set_xlabel("Blocks removed so far (k)")
+    ax2.set_ylabel("Macro F1 on the 2,000 ranking images")
+    ax2.set_title("What the model keeps after each removal\n(before fine-tuning, BatchNorm recalibrated)",
+                  loc="left", fontsize=10.5, pad=10)
+    ax2.grid(axis="x", visible=False)
+    fig.suptitle(f"How the blocks were chosen (greedy, subset seed {seed})\n"
+                 "At each step, every remaining block is removed on a copy and scored; the cheapest one is removed "
+                 "for good, then the remaining blocks are scored again.", x=0.01, ha="left", fontsize=10.5, y=1.12,
+                 linespacing=1.5)
+    save(fig, "fig01_ranking_steps")
+
+
 def fig_ranking_steps(seed):
     table = pd.read_csv(SELECTION / f"ranking_seed{seed}.csv")
     table = table[table["step"] > 0]
@@ -133,7 +204,7 @@ def fig_ranking_steps(seed):
         ax.set_xlabel("Loss increase vs full model")
     fig.suptitle(f"Greedy block ranking (subset seed {seed}): class-weighted CE increase after BN recalibration, "
                  "2,000 train images; blue = removed at this step", x=0.01, ha="left", fontsize=10.5, y=1.1)
-    save(fig, "fig01_ranking_steps")
+    save(fig, "fig01b_ranking_steps_detail")
 
 
 def fig_ranking_seeds(seeds):
@@ -481,6 +552,7 @@ def summary_table(r):
 def main(args):
     seeds = [int(c.split("seed")[1]) for c in pd.read_csv(SELECTION / "ranking_comparison.csv").columns
              if c.startswith("position_seed")]
+    fig_ranking_simple(seeds[0])
     fig_ranking_steps(seeds[0])
     fig_ranking_seeds(seeds)
     fig_bn_recalibration(seeds[0])
