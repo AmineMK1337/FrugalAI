@@ -1,0 +1,126 @@
+{
+  "run": "blocks4_seed42",
+  "k": 4,
+  "seed": 42,
+  "start": "recal",
+  "removed_blocks": [
+    "layer2.1",
+    "layer1.0",
+    "layer3.1",
+    "layer4.1"
+  ],
+  "params_before": 11180103,
+  "params_after": 4909383,
+  "param_reduction_pct": 56.088213140791275,
+  "params_removed_analytic": 6270720,
+  "gmacs_before": 1.820915719,
+  "gmacs_after": 0.894190087,
+  "gmac_reduction_pct": 50.89338415448101,
+  "gmacs_removed_analytic": 0.924844032,
+  "settings": {
+    "checkpoint": "resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth",
+    "config": "configs/strong_cosine25.yaml",
+    "model": "torchvision.models.quantization.resnet18(weights=None, quantize=False, num_classes=7), strict load",
+    "pruning": "whole identity-shortcut BasicBlocks replaced by nn.Identity, first k of the greedy order",
+    "removal_order": [
+      "layer2.1",
+      "layer1.0",
+      "layer3.1",
+      "layer4.1",
+      "layer1.1"
+    ],
+    "ranking": "pruning/structured/whole_block/results/selection/ranking_seed42.csv",
+    "bn_recalibration": {
+      "subset": "pruning/structured/whole_block/results/selection/subset_seed42.csv",
+      "images": 2000,
+      "batch_size": 32,
+      "leakage_check": {
+        "images": 2000,
+        "unique_images": 2000,
+        "not_in_train_partition": 0,
+        "sharing_a_validation_or_test_lesion": 0
+      },
+      "method": "reset every BatchNorm, momentum=None (cumulative average), train-mode forward passes without gradients, momentum restored"
+    },
+    "fine_tuning": {
+      "epochs": 10,
+      "optimizer": "Adam",
+      "lr": 0.0001,
+      "schedule": "CosineAnnealingLR(T_max=10), stepped per epoch",
+      "batch_size": 32,
+      "augmentation": "strong",
+      "loss": "CrossEntropyLoss, balanced class weights from the train split",
+      "start": "BN-recalibrated model (filter pruning starts from the raw pruned model)"
+    },
+    "selection": "best validation macro F1 epoch (first maximum); epoch 10 also reported",
+    "torch": "2.12.0+cu126",
+    "torch_pruning": "1.6.1",
+    "gpu": "NVIDIA A40-24Q",
+    "sha256_protected": {
+      "/home/salma/FrugalAI/resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth": "1233528ddb3f0ebab9eeae6dae36acbc98292cc9aa34dadb7e553d5852077927",
+      "/home/salma/FrugalAI/resnet18_finetunning/splits/ham10000_splits.csv": "d7b17a1900f233db66a2e76d66eea333863404c53ea4fa2c154dbecd6cfe4f82",
+      "/home/salma/FrugalAI/resnet18_finetunning/configs/strong_cosine25.yaml": "da7f6b852cd0d4a6d7715ee26a768c614f7cab1b14af562546360a9f4409f73e"
+    }
+  },
+  "fused_vs_unfused_max_abs_logit_difference": {
+    "raw": 4.76837158203125e-07,
+    "recal": 2.2351741790771484e-07,
+    "selected": 2.384185791015625e-06,
+    "epoch10": 2.384185791015625e-06
+  },
+  "raw": {
+    "accuracy": 0.664490861618799,
+    "balanced_accuracy": 0.14285714285714285,
+    "precision_macro": 0.09492726594554271,
+    "recall_macro": 0.14285714285714285,
+    "specificity_macro": 0.8571428571428571,
+    "f1_macro": 0.11406162464985994,
+    "auc_macro": 0.5174070998935008,
+    "melanoma_recall": 0.0,
+    "identical_to_fp32_pct": 62.33681462140992,
+    "val_loss": 2.493863344192505
+  },
+  "recal": {
+    "accuracy": 0.664490861618799,
+    "balanced_accuracy": 0.14285714285714285,
+    "precision_macro": 0.09492726594554271,
+    "recall_macro": 0.14285714285714285,
+    "specificity_macro": 0.8571428571428571,
+    "f1_macro": 0.11406162464985994,
+    "auc_macro": 0.6422269291632,
+    "melanoma_recall": 0.0,
+    "identical_to_fp32_pct": 62.33681462140992,
+    "val_loss": 1.9610188007354736
+  },
+  "selected_epoch": 10,
+  "selected": {
+    "accuracy": 0.7480417754569191,
+    "balanced_accuracy": 0.6989616513747184,
+    "precision_macro": 0.5831035581410372,
+    "recall_macro": 0.6989616513747184,
+    "specificity_macro": 0.9533139115098707,
+    "f1_macro": 0.6236965766464689,
+    "auc_macro": 0.9360013129172595,
+    "melanoma_recall": 0.7167630057803468,
+    "identical_to_fp32_pct": 78.85117493472585,
+    "val_loss": 0.9141178727149963
+  },
+  "epoch10": {
+    "accuracy": 0.7480417754569191,
+    "balanced_accuracy": 0.6989616513747184,
+    "precision_macro": 0.5831035581410372,
+    "recall_macro": 0.6989616513747184,
+    "specificity_macro": 0.9533139115098707,
+    "f1_macro": 0.6236965766464689,
+    "auc_macro": 0.9360013129172595,
+    "melanoma_recall": 0.7167630057803468,
+    "identical_to_fp32_pct": 78.85117493472585,
+    "val_loss": 0.9141178727149963
+  },
+  "files": {
+    "raw": "pruning/structured/whole_block/models/blocks4_seed42_raw.pt",
+    "recal": "pruning/structured/whole_block/models/blocks4_seed42_recal.pt",
+    "selected": "pruning/structured/whole_block/models/blocks4_seed42_selected.pt",
+    "epoch10": "pruning/structured/whole_block/models/blocks4_seed42_epoch10.pt"
+  }
+}

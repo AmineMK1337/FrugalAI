@@ -28,6 +28,14 @@ zeros. Storage columns for every model with FP32 weights: zeros and sparsity of 
 parameters, and the torch.save(state_dict) size dense and gzip-compressed (level 9):
   python evaluation/evaluate.py --models fp32 sparse50_seed42 ... --results-dir pruning/unstructured/results/evaluation
 
+Whole-block pruning (pruning/structured/whole_block/): blocks<k>_seed<s> are whole saved modules in which k
+identity-shortcut BasicBlocks are nn.Identity (pruning/structured/whole_block/models/<run>_selected.pt), fused with
+fuse_model() and traced like the other pruned models. Any Conv2d-BatchNorm2d(-ReLU) nn.Sequential that fuse_model()
+does not reach (residual-branch pruning will keep a downsample shortcut as one) is fused too, so every model is
+measured fully fused:
+  python evaluation/evaluate.py --models fp32 control_seed42 blocks1_seed42 ... \
+      --results-dir pruning/structured/whole_block/results/evaluation
+
 Usage: python evaluation/evaluate.py [--split validation|test] [--repeats 3] [--country TUN] [--models ...]
        [--results-dir DIR]
 Writes evaluation/results/<model>/<metric_type>/, evaluation/results/comparison/<metric_type>/ and
@@ -65,6 +73,7 @@ WEIGHT_ONLY = ROOT / "quantization" / "ptq" / "weight_only"
 QAT = ROOT / "quantization" / "qat"
 PRUNING = ROOT / "pruning" / "structured" / "filter"
 UNSTRUCTURED = ROOT / "pruning" / "unstructured"
+WHOLE_BLOCK = ROOT / "pruning" / "structured" / "whole_block"
 RESULTS = HERE / "results"
 sys.path[:0] = [str(PROJECT / "src"), str(WEIGHT_ONLY)]
 LAUNCH_DIR = Path.cwd()  # relative --results-dir is taken from where the script is launched
@@ -142,8 +151,20 @@ def saved_module(path):
     return lambda: torch.load(path, map_location="cpu", weights_only=False).eval()
 
 
+def fuse_sequentials(module):
+    """Fuse, in place, every nn.Sequential that is exactly Conv2d-BatchNorm2d or Conv2d-BatchNorm2d-ReLU and that
+    fuse_model() leaves unfused (it only reaches QuantizableBasicBlock modules). No-op for the other models."""
+    for name, child in list(module.named_modules()):
+        if isinstance(child, torch.nn.Sequential) and len(child) in (2, 3) and \
+                isinstance(child[0], torch.nn.Conv2d) and isinstance(child[1], torch.nn.BatchNorm2d) and \
+                (len(child) == 2 or isinstance(child[2], torch.nn.ReLU)):
+            torch.ao.quantization.fuse_modules(child, [str(i) for i in range(len(child))], inplace=True)
+    return module
+
+
 def fused_module_torchscript(module):
     module.eval().fuse_model()
+    fuse_sequentials(module)
     with torch.no_grad():
         return torch.jit.trace(module, torch.zeros(1, 3, 224, 224))
 
@@ -160,6 +181,12 @@ for _path in sorted((UNSTRUCTURED / "models").glob("sparse*_selected.pt")):  # s
     MODELS[_name] = dict(
         state=None, module=saved_module(_path), unfused=saved_module(_path), file=_path,
         note=f"FP32, unstructured pruning (target {_name[6:].split('_')[0]}% of conv/linear weights set to zero), "
+             "best validation macro F1 epoch")
+for _path in sorted((WHOLE_BLOCK / "models").glob("blocks*_selected.pt")):  # blocks<k>_seed<s>[_rawstart]
+    _name = _path.name[:-len("_selected.pt")]
+    MODELS[_name] = dict(
+        state=None, module=saved_module(_path), unfused=saved_module(_path), file=_path,
+        note=f"FP32, whole-block pruning ({_name[6:].split('_')[0]} identity-shortcut BasicBlock(s) removed), "
              "best validation macro F1 epoch")
 
 def export_torchscript(workdir):
@@ -269,15 +296,15 @@ def check_against_earlier_results(overall):
     """Fusing changes only rounding, so performance must equal the results saved when the models were made
     (exactly for prediction-based metrics; AUC, which uses probabilities, up to 1e-4)."""
     tolerance = {m: 1e-9 for m in PERFORMANCE} | {"auc_macro": 1e-4}
-    for name in (n for n in MODELS if n.startswith(("pruned", "control", "sparse"))):
+    for name in (n for n in MODELS if n.startswith(("pruned", "control", "sparse", "blocks"))):
         # saved by prune.py from GPU logits: a prediction near a tie may flip on the CPU, so allow 2 images
-        source = UNSTRUCTURED if name.startswith("sparse") else PRUNING
+        source = {"sparse": UNSTRUCTURED, "blocks": WHOLE_BLOCK}.get(name[:6], PRUNING)
         saved = pd.read_csv(source / "results" / name / "metrics.csv")
         saved = saved[saved["stage"].str.startswith("selected")].iloc[0]
         diff = abs(overall[name]["accuracy"] - saved["accuracy"]) * overall[name]["n_images"]
         print(f"{name}: accuracy differs from the prune.py validation result by {diff:.0f} image(s)", flush=True)
         if diff > 2:
-            sys.exit(f"CHECK FAILED: {name} accuracy differs from {PRUNING}/results by {diff:.0f} images")
+            sys.exit(f"CHECK FAILED: {name} accuracy differs from {source}/results by {diff:.0f} images")
     if "fp32" not in MODELS:
         return
     weight_only = pd.read_csv(WEIGHT_ONLY / "results/validation_results.csv").set_index("model")
@@ -393,6 +420,7 @@ def flops_and_params(name):
         model.load_state_dict(fp32_state(), strict=True)
     params = sum(p.numel() for p in model.parameters())
     model.eval().fuse_model()
+    fuse_sequentials(model)
     macs, _ = get_model_complexity_info(model, (3, 224, 224), as_strings=False, print_per_layer_stat=False,
                                         verbose=False)
     return 2 * macs / 1e9, params
@@ -557,7 +585,9 @@ def main(args):
             "qat": "saved fused INT8 TorchScript (torch.jit.script), loaded as is",
             "pruned / control": "whole saved FP32 module (pruning/structured/filter/models), fuse_model(), torch.jit.trace",
             "sparse": "whole saved FP32 module with exact zeros (pruning/unstructured/models), fuse_model(), "
-                      "torch.jit.trace; dense kernels"},
+                      "torch.jit.trace; dense kernels",
+            "blocks": "whole saved FP32 module, removed blocks are nn.Identity (pruning/structured/whole_block/models), "
+                      "fuse_model() + Conv-BN(-ReLU) Sequential fusion, torch.jit.trace"},
         "models": list(MODELS),
         "fused_vs_unfused_check": fused_check.to_dict(orient="records"),
         "cpu": subprocess.run("lscpu | grep 'Model name'", shell=True, capture_output=True,

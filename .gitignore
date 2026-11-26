@@ -40,3 +40,7 @@ pruning/unstructured/models/
 # evaluate.py working folders (TemporaryDirectory); normally deleted, left behind if a run is killed
 evaluation/**/tmp*/
 pruning/**/evaluation/tmp*/
+
+# whole-block pruning: raw and BN-recalibrated stages are rebuilt deterministically by prune_blocks.py
+pruning/structured/whole_block/models/*_raw.pt
+pruning/structured/whole_block/models/*_recal.pt

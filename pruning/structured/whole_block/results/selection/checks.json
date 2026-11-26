@@ -1,0 +1,184 @@
+{
+  "mode": "identity",
+  "candidates": [
+    "layer1.0",
+    "layer1.1",
+    "layer2.1",
+    "layer3.1",
+    "layer4.1"
+  ],
+  "subset_size": 2000,
+  "min_per_class": 50,
+  "class_weights": {
+    "akiec": 4.492278099060059,
+    "bcc": 2.7625644207000732,
+    "bkl": 1.2918208837509155,
+    "df": 14.04627799987793,
+    "mel": 1.2901496887207031,
+    "nv": 0.21295872330665588,
+    "vasc": 10.073593139648438
+  },
+  "seeds": {
+    "42": {
+      "images_per_class": {
+        "akiec": 64,
+        "bcc": 103,
+        "bkl": 221,
+        "df": 50,
+        "mel": 221,
+        "nv": 1291,
+        "vasc": 50
+      },
+      "leakage_check": {
+        "images": 2000,
+        "unique_images": 2000,
+        "not_in_train_partition": 0,
+        "sharing_a_validation_or_test_lesion": 0
+      },
+      "exactness_check": {
+        "layer1.0": {
+          "max_abs_logit_difference": 0.0,
+          "min_block_input": 0.0
+        },
+        "layer1.1": {
+          "max_abs_logit_difference": 0.0,
+          "min_block_input": 0.0
+        },
+        "layer2.1": {
+          "max_abs_logit_difference": 0.0,
+          "min_block_input": 0.0
+        },
+        "layer3.1": {
+          "max_abs_logit_difference": 0.0,
+          "min_block_input": 0.0
+        },
+        "layer4.1": {
+          "max_abs_logit_difference": 0.0,
+          "min_block_input": 0.0
+        }
+      },
+      "removal_order": [
+        "layer2.1",
+        "layer1.0",
+        "layer3.1",
+        "layer4.1",
+        "layer1.1"
+      ]
+    },
+    "1": {
+      "images_per_class": {
+        "akiec": 64,
+        "bcc": 103,
+        "bkl": 221,
+        "df": 50,
+        "mel": 221,
+        "nv": 1291,
+        "vasc": 50
+      },
+      "leakage_check": {
+        "images": 2000,
+        "unique_images": 2000,
+        "not_in_train_partition": 0,
+        "sharing_a_validation_or_test_lesion": 0
+      },
+      "removal_order": [
+        "layer2.1",
+        "layer1.1",
+        "layer3.1",
+        "layer4.1",
+        "layer1.0"
+      ]
+    }
+  },
+  "kendall_tau_seed42_vs_seed1": 0.0,
+  "removed_sets_seed42_vs_seed1": [
+    {
+      "k": 1,
+      "removed_seed42": [
+        "layer2.1"
+      ],
+      "removed_seed1": [
+        "layer2.1"
+      ],
+      "same_blocks": true,
+      "same_blocks_per_stage": true
+    },
+    {
+      "k": 2,
+      "removed_seed42": [
+        "layer2.1",
+        "layer1.0"
+      ],
+      "removed_seed1": [
+        "layer2.1",
+        "layer1.1"
+      ],
+      "same_blocks": false,
+      "same_blocks_per_stage": true
+    },
+    {
+      "k": 3,
+      "removed_seed42": [
+        "layer2.1",
+        "layer1.0",
+        "layer3.1"
+      ],
+      "removed_seed1": [
+        "layer2.1",
+        "layer1.1",
+        "layer3.1"
+      ],
+      "same_blocks": false,
+      "same_blocks_per_stage": true
+    },
+    {
+      "k": 4,
+      "removed_seed42": [
+        "layer2.1",
+        "layer1.0",
+        "layer3.1",
+        "layer4.1"
+      ],
+      "removed_seed1": [
+        "layer2.1",
+        "layer1.1",
+        "layer3.1",
+        "layer4.1"
+      ],
+      "same_blocks": false,
+      "same_blocks_per_stage": true
+    },
+    {
+      "k": 5,
+      "removed_seed42": [
+        "layer2.1",
+        "layer1.0",
+        "layer3.1",
+        "layer4.1",
+        "layer1.1"
+      ],
+      "removed_seed1": [
+        "layer2.1",
+        "layer1.1",
+        "layer3.1",
+        "layer4.1",
+        "layer1.0"
+      ],
+      "same_blocks": true,
+      "same_blocks_per_stage": true
+    }
+  ],
+  "order_used_for_pruning": [
+    "layer2.1",
+    "layer1.0",
+    "layer3.1",
+    "layer4.1",
+    "layer1.1"
+  ],
+  "sha256_protected": {
+    "/home/salma/FrugalAI/resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth": "1233528ddb3f0ebab9eeae6dae36acbc98292cc9aa34dadb7e553d5852077927",
+    "/home/salma/FrugalAI/resnet18_finetunning/splits/ham10000_splits.csv": "d7b17a1900f233db66a2e76d66eea333863404c53ea4fa2c154dbecd6cfe4f82",
+    "/home/salma/FrugalAI/resnet18_finetunning/configs/strong_cosine25.yaml": "da7f6b852cd0d4a6d7715ee26a768c614f7cab1b14af562546360a9f4409f73e"
+  },
+  "torch": "2.12.0+cu126"
+}

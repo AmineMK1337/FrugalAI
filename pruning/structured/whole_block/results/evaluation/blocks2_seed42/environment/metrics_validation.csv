@@ -1,0 +1,2 @@
+model,format,threads,energy_wh_per_1000,co2e_g_per_1000,estimated_power_w,seconds_per_run,source,grid_g_per_kwh,country
+blocks2_seed42,fused + TorchScript,1,2.802499824059057,1.5804865907770491,252.43665521125314,61.435917634982616,estimate (CodeCarbon process mode; no RAPL counter on this VM),563.956,TUN

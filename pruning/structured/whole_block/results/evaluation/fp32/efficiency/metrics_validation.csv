@@ -1,0 +1,2 @@
+model,format,size_mb,gflops,params,weights_prunable,weights_zero,sparsity_pct,params_nonzero,state_dict_dense_mb,state_dict_gzip_mb,latency_median_ms_1t,latency_p95_ms_1t,throughput_img_s_1t,peak_memory_mb_1t,latency_median_ms_4t,latency_p95_ms_4t,throughput_img_s_4t,peak_memory_mb_4t,note
+fp32,fused + TorchScript,44.800907,3.644641294,11180103,11170496,0,0.0,11180103,44.798283,41.561612,54.02786401100457,55.87887315778062,20.044976008579436,77.17578125,15.340029494836926,15.673436503857374,68.57824642458134,77.765625,FP32

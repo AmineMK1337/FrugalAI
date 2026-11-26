@@ -1,0 +1,123 @@
+{
+  "run": "blocks1_seed42",
+  "k": 1,
+  "seed": 42,
+  "start": "recal",
+  "removed_blocks": [
+    "layer2.1"
+  ],
+  "params_before": 11180103,
+  "params_after": 10884679,
+  "param_reduction_pct": 2.6424085717278274,
+  "params_removed_analytic": 295424,
+  "gmacs_before": 1.820915719,
+  "gmacs_after": 1.589202951,
+  "gmac_reduction_pct": 12.72506824902641,
+  "gmacs_removed_analytic": 0.231211008,
+  "settings": {
+    "checkpoint": "resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth",
+    "config": "configs/strong_cosine25.yaml",
+    "model": "torchvision.models.quantization.resnet18(weights=None, quantize=False, num_classes=7), strict load",
+    "pruning": "whole identity-shortcut BasicBlocks replaced by nn.Identity, first k of the greedy order",
+    "removal_order": [
+      "layer2.1",
+      "layer1.0",
+      "layer3.1",
+      "layer4.1",
+      "layer1.1"
+    ],
+    "ranking": "pruning/structured/whole_block/results/selection/ranking_seed42.csv",
+    "bn_recalibration": {
+      "subset": "pruning/structured/whole_block/results/selection/subset_seed42.csv",
+      "images": 2000,
+      "batch_size": 32,
+      "leakage_check": {
+        "images": 2000,
+        "unique_images": 2000,
+        "not_in_train_partition": 0,
+        "sharing_a_validation_or_test_lesion": 0
+      },
+      "method": "reset every BatchNorm, momentum=None (cumulative average), train-mode forward passes without gradients, momentum restored"
+    },
+    "fine_tuning": {
+      "epochs": 10,
+      "optimizer": "Adam",
+      "lr": 0.0001,
+      "schedule": "CosineAnnealingLR(T_max=10), stepped per epoch",
+      "batch_size": 32,
+      "augmentation": "strong",
+      "loss": "CrossEntropyLoss, balanced class weights from the train split",
+      "start": "BN-recalibrated model (filter pruning starts from the raw pruned model)"
+    },
+    "selection": "best validation macro F1 epoch (first maximum); epoch 10 also reported",
+    "torch": "2.12.0+cu126",
+    "torch_pruning": "1.6.1",
+    "gpu": "NVIDIA A40-24Q",
+    "sha256_protected": {
+      "/home/salma/FrugalAI/resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth": "1233528ddb3f0ebab9eeae6dae36acbc98292cc9aa34dadb7e553d5852077927",
+      "/home/salma/FrugalAI/resnet18_finetunning/splits/ham10000_splits.csv": "d7b17a1900f233db66a2e76d66eea333863404c53ea4fa2c154dbecd6cfe4f82",
+      "/home/salma/FrugalAI/resnet18_finetunning/configs/strong_cosine25.yaml": "da7f6b852cd0d4a6d7715ee26a768c614f7cab1b14af562546360a9f4409f73e"
+    }
+  },
+  "fused_vs_unfused_max_abs_logit_difference": {
+    "raw": 1.9073486328125e-05,
+    "recal": 1.5735626220703125e-05,
+    "selected": 1.2159347534179688e-05,
+    "epoch10": 1.430511474609375e-05
+  },
+  "raw": {
+    "accuracy": 0.7434725848563969,
+    "balanced_accuracy": 0.5088145107700041,
+    "precision_macro": 0.7093955777965919,
+    "recall_macro": 0.5088145107700041,
+    "specificity_macro": 0.9424673511336724,
+    "f1_macro": 0.5356448227737342,
+    "auc_macro": 0.9195826019352883,
+    "melanoma_recall": 0.838150289017341,
+    "identical_to_fp32_pct": 77.80678851174935,
+    "val_loss": 2.8310842514038086
+  },
+  "recal": {
+    "accuracy": 0.7519582245430809,
+    "balanced_accuracy": 0.6068936252593734,
+    "precision_macro": 0.6021968986896226,
+    "recall_macro": 0.6068936252593734,
+    "specificity_macro": 0.9484166675412619,
+    "f1_macro": 0.5952054980358218,
+    "auc_macro": 0.9411139469398725,
+    "melanoma_recall": 0.5664739884393064,
+    "identical_to_fp32_pct": 82.96344647519582,
+    "val_loss": 1.362709403038025
+  },
+  "selected_epoch": 7,
+  "selected": {
+    "accuracy": 0.8152741514360313,
+    "balanced_accuracy": 0.7180868349668722,
+    "precision_macro": 0.7328203643123462,
+    "recall_macro": 0.7180868349668722,
+    "specificity_macro": 0.9622271360316825,
+    "f1_macro": 0.7122751560686931,
+    "auc_macro": 0.9642407012211677,
+    "melanoma_recall": 0.6589595375722543,
+    "identical_to_fp32_pct": 89.68668407310705,
+    "val_loss": 1.0862191915512085
+  },
+  "epoch10": {
+    "accuracy": 0.8191906005221932,
+    "balanced_accuracy": 0.7043364071683722,
+    "precision_macro": 0.7604680241359544,
+    "recall_macro": 0.7043364071683722,
+    "specificity_macro": 0.9612295380511323,
+    "f1_macro": 0.7105021655248388,
+    "auc_macro": 0.9653599618270754,
+    "melanoma_recall": 0.6936416184971098,
+    "identical_to_fp32_pct": 90.0130548302872,
+    "val_loss": 1.181685447692871
+  },
+  "files": {
+    "raw": "pruning/structured/whole_block/models/blocks1_seed42_raw.pt",
+    "recal": "pruning/structured/whole_block/models/blocks1_seed42_recal.pt",
+    "selected": "pruning/structured/whole_block/models/blocks1_seed42_selected.pt",
+    "epoch10": "pruning/structured/whole_block/models/blocks1_seed42_epoch10.pt"
+  }
+}

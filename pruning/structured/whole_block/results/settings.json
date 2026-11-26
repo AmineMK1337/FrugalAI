@@ -1,0 +1,45 @@
+{
+  "checkpoint": "resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth",
+  "config": "configs/strong_cosine25.yaml",
+  "model": "torchvision.models.quantization.resnet18(weights=None, quantize=False, num_classes=7), strict load",
+  "pruning": "whole identity-shortcut BasicBlocks replaced by nn.Identity, first k of the greedy order",
+  "removal_order": [
+    "layer2.1",
+    "layer1.0",
+    "layer3.1",
+    "layer4.1",
+    "layer1.1"
+  ],
+  "ranking": "pruning/structured/whole_block/results/selection/ranking_seed42.csv",
+  "bn_recalibration": {
+    "subset": "pruning/structured/whole_block/results/selection/subset_seed42.csv",
+    "images": 2000,
+    "batch_size": 32,
+    "leakage_check": {
+      "images": 2000,
+      "unique_images": 2000,
+      "not_in_train_partition": 0,
+      "sharing_a_validation_or_test_lesion": 0
+    },
+    "method": "reset every BatchNorm, momentum=None (cumulative average), train-mode forward passes without gradients, momentum restored"
+  },
+  "fine_tuning": {
+    "epochs": 10,
+    "optimizer": "Adam",
+    "lr": 0.0001,
+    "schedule": "CosineAnnealingLR(T_max=10), stepped per epoch",
+    "batch_size": 32,
+    "augmentation": "strong",
+    "loss": "CrossEntropyLoss, balanced class weights from the train split",
+    "start": "BN-recalibrated model (filter pruning starts from the raw pruned model)"
+  },
+  "selection": "best validation macro F1 epoch (first maximum); epoch 10 also reported",
+  "torch": "2.12.0+cu126",
+  "torch_pruning": "1.6.1",
+  "gpu": "NVIDIA A40-24Q",
+  "sha256_protected": {
+    "/home/salma/FrugalAI/resnet18_finetunning/results/strong_cosine25_resnet18/resnet18_baseline.pth": "1233528ddb3f0ebab9eeae6dae36acbc98292cc9aa34dadb7e553d5852077927",
+    "/home/salma/FrugalAI/resnet18_finetunning/splits/ham10000_splits.csv": "d7b17a1900f233db66a2e76d66eea333863404c53ea4fa2c154dbecd6cfe4f82",
+    "/home/salma/FrugalAI/resnet18_finetunning/configs/strong_cosine25.yaml": "da7f6b852cd0d4a6d7715ee26a768c614f7cab1b14af562546360a9f4409f73e"
+  }
+}
