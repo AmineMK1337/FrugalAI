@@ -1,0 +1,2 @@
+model,format,size_mb,gflops,params,weights_prunable,weights_zero,sparsity_pct,params_nonzero,state_dict_dense_mb,state_dict_gzip_mb,latency_median_ms_1t,latency_p95_ms_1t,throughput_img_s_1t,peak_memory_mb_1t,latency_median_ms_4t,latency_p95_ms_4t,throughput_img_s_4t,peak_memory_mb_4t,note
+qat,fused + TorchScript,11.321539,3.644641294,11180103,,,,,,,6.765371537767351,7.02079075272195,155.4463952794543,52.9765625,2.111533423885703,2.1825658448506147,578.0192794240061,52.6484375,"INT8 weights and activations (x86 engine), QAT, final model (epoch 10)"

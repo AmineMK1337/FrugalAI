@@ -144,6 +144,11 @@ MODELS = {  # name: weights (None = already TorchScript), unfused reference, fil
                 note="INT8 weights and activations (x86 engine), QAT, final model (epoch 10)"),
 }
 DEFAULT_MODELS = list(MODELS)
+for _path in sorted(QAT.glob("resnet18_qat_int8_seed*.pt")):  # qat_seed<s>: QAT repeated with other training seeds
+    _seed = _path.stem.split("seed")[-1]
+    MODELS[f"qat_seed{_seed}"] = dict(
+        state=None, unfused=None, file=_path,
+        note=f"INT8 weights and activations (x86 engine), QAT training seed {_seed}, final model (epoch 10)")
 
 
 def saved_module(path):
@@ -322,6 +327,11 @@ def check_against_earlier_results(overall):
         for metric in (m for m in PERFORMANCE if m in qat):
             if abs(overall[name][metric] - qat.loc[old, metric]) > tolerance[metric]:
                 sys.exit(f"CHECK FAILED: {name} {metric} differs from {QAT}/results")
+    for name in (n for n in MODELS if n.startswith("qat_seed")):  # saved by qat.py in results/seed<s>/
+        saved = pd.read_csv(QAT / "results" / name[4:] / "validation_results.csv").set_index("model").loc["QAT"]
+        for metric in (m for m in PERFORMANCE if m in saved):
+            if abs(overall[name][metric] - saved[metric]) > tolerance[metric]:
+                sys.exit(f"CHECK FAILED: {name} {metric} differs from {QAT}/results/{name[4:]}")
     static = pd.read_csv(STATIC / "results/validation_results.csv").set_index("model")
     if "ptq_static" in MODELS:  # the saved file is the seed-42 calibration
         for metric in (m for m in PERFORMANCE if m in static):

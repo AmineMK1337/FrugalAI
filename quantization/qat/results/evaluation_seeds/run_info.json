@@ -1,0 +1,71 @@
+{
+  "split": "validation",
+  "n_images": 1532,
+  "classes": [
+    "akiec",
+    "bcc",
+    "bkl",
+    "df",
+    "mel",
+    "nv",
+    "vasc"
+  ],
+  "device": "cpu",
+  "format": "fused + TorchScript",
+  "format_details": {
+    "fp32": "weights in torchvision.models.quantization.resnet18 (quantize=False), fuse_model(), torch.jit.trace",
+    "weight_only_per_channel": "dequantized to FP32, then as fp32",
+    "weight_only_per_tensor": "dequantized to FP32, then as fp32",
+    "ptq_static": "saved fused INT8 TorchScript (torch.jit.script), loaded as is",
+    "qat": "saved fused INT8 TorchScript (torch.jit.script), loaded as is",
+    "pruned / control": "whole saved FP32 module (pruning/structured/filter/models), fuse_model(), torch.jit.trace",
+    "sparse": "whole saved FP32 module with exact zeros (pruning/unstructured/models), fuse_model(), torch.jit.trace; dense kernels",
+    "blocks": "whole saved FP32 module, removed blocks are nn.Identity (pruning/structured/whole_block/models), fuse_model() + Conv-BN(-ReLU) Sequential fusion, torch.jit.trace"
+  },
+  "models": [
+    "fp32",
+    "qat",
+    "qat_seed1",
+    "qat_seed2"
+  ],
+  "fused_vs_unfused_check": [
+    {
+      "model": "fp32",
+      "n_images": 1532,
+      "identical_predictions_pct": 100.0,
+      "max_abs_logit_difference": 2.47955322265625e-05,
+      "max_abs_probability_difference": 5.245208740234375e-06
+    }
+  ],
+  "cpu": "Intel(R) Xeon(R) Gold 6348 CPU @ 2.60GHz",
+  "logical_cpus": 32,
+  "threads": [
+    1,
+    4
+  ],
+  "threads_main": 1,
+  "interop_threads": 1,
+  "repeats": 3,
+  "warmup_runs": 30,
+  "latency_runs": 200,
+  "throughput_batch_size": 32,
+  "peak_memory": "psutil RSS, sampled every 1 ms during load + warm-up",
+  "energy_threads": 1,
+  "energy_min_seconds": 60,
+  "bootstrap_resamples": 1000,
+  "bootstrap_seed": 0,
+  "quantized_engine": "x86",
+  "flops_counted_on": "fused FP32 architecture, for every model",
+  "torch": "2.12.0+cu126",
+  "python": "3.11.6",
+  "country_for_co2e": "TUN",
+  "date_utc": "2026-11-26T22:51:51+00:00",
+  "sha256": {
+    "fp32": "1233528ddb3f0ebab9eeae6dae36acbc98292cc9aa34dadb7e553d5852077927",
+    "qat": "e4dcd792247bffbc4bc529c13c6620623901a12e28038cb003c3f58f04ceabe1",
+    "qat_seed1": "ffdd42f3cde471c4f1e69c61fc06d7040a1a5b620aae1814e966bdea0d52a4b8",
+    "qat_seed2": "fec8cb9acd2a5e04ec06a6ecc79e701fbe5ece22bfcc492ccdb634e14d101172",
+    "split_csv": "d7b17a1900f233db66a2e76d66eea333863404c53ea4fa2c154dbecd6cfe4f82",
+    "config": "da7f6b852cd0d4a6d7715ee26a768c614f7cab1b14af562546360a9f4409f73e"
+  }
+}

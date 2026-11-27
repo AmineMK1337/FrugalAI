@@ -28,12 +28,14 @@ SRC = {
     "F": ROOT / "pruning/structured/filter/results/evaluation",
     "B": ROOT / "pruning/structured/whole_block/results/evaluation",
     "U": ROOT / "pruning/unstructured/results/evaluation",
+    "QS": ROOT / "quantization/qat/results/evaluation_seeds",  # QAT seeds 42, 1, 2 (+ FP32), one session
 }
 PTQ_SEEDS = ROOT / "quantization/ptq/static/results/validation_results.csv"
 STAGE1 = {"F": ROOT / "pruning/structured/filter/results/comparaison/stage1_cpu_validation.csv",
           "U": ROOT / "pruning/unstructured/results/report/stage1_cpu_validation.csv"}
 BLOCK_RUNS = ROOT / "pruning/structured/whole_block/results"
 SEEDS = (42, 1, 2)
+QAT_RUNS = ["qat", "qat_seed1", "qat_seed2"]  # training seeds 42, 1, 2
 BLOCK_ORDER = ["layer2.1", "layer1.0", "layer3.1", "layer4.1", "layer1.1"]
 
 
@@ -86,13 +88,15 @@ PERF_KEYS = ["accuracy", "balanced_accuracy", "precision_macro", "specificity_ma
 class Model:
     """One table row: a single run, or the mean of several seeds (self.runs holds every run)."""
 
-    def __init__(self, session, base, multi=False, ptq=False):
+    def __init__(self, session, base=None, multi=False, ptq=False, names=None):
         if ptq:  # efficiency measured on the saved (seed-42) model only; performance averaged over 3 calibrations
             seeds = ptq_seed_rows()
             self.runs = [dict(get(session, base), **{k: s[k] for k in PERF_KEYS}) for s in seeds]
             for run in self.runs[1:]:  # no paired-bootstrap p for calibration sets 1 and 2
                 for k in PERF_KEYS:
                     run[f"{k}_paired_bootstrap_p"] = ""
+        elif names:
+            self.runs = [get(session, n) for n in names]
         elif multi:
             self.runs = [get(session, f"{base}_seed{s}") for s in SEEDS]
         else:
@@ -171,7 +175,7 @@ def table_setup():
          "Trained until ep.\\ 7, then frozen; quantizer ranges frozen from ep.\\ 8"),
         ("Checkpoint kept", f"Lowest validation loss (epoch {best_epoch})", "Highest validation macro F1",
          "Last epoch (no selection)"),
-        ("Seeds", "42", "42 (+1, 2 for control, filter 10\\%, unstructured 70\\%)", "42"),
+        ("Seeds", "42", "42 (+1, 2 for control, filter 10\\%, unstructured 70\\%)", "42, 1, 2"),
         ("Hardware", span("NVIDIA A40 (24\\,GB), PyTorch 2.12")),
         ("GPU time", f"{base_min:.1f} min", f"$\\approx${ft_min:.1f} min per run", f"{qat_min:.1f} min"),
     ]
@@ -273,7 +277,7 @@ GROUPS = [
         ("Weight-only PTQ, per-tensor$^{a}$", Model("Q", "weight_only_per_tensor"), "method"),
         ("Weight-only PTQ, per-channel$^{a}$", Model("Q", "weight_only_per_channel"), "method"),
         ("Static PTQ (W8A8)", Model("Q", "ptq_static", ptq=True), "method"),
-        ("QAT (W8A8)", Model("Q", "qat"), "method")]),
+        ("QAT (W8A8)", Model("QS", names=QAT_RUNS), "method")]),
     ("Unstructured pruning (weights zeroed)$^{b}$, after fine-tuning", [
         (f"{s}\\% of weights zeroed", Model("U", f"sparse{s}", multi=True) if s == 70 else Model("U", f"sparse{s}_seed42"),
          "method") for s in (30, 50, 70, 90)]),
@@ -359,7 +363,7 @@ def table_main():
     w("\\item \\textit{Speed.} Lat.: batch 1, median of 200 runs (30 warm-up), median of 3 interleaved repeats, at "
       "1 thread (1T) and 4 threads (4T). Thr.: batch 32. Peak RAM: memory increase while loading and warming up. "
       "GFLOPs are counted on the FP32 graph for every model (INT8 runs the same operations in INT8). "
-      f"Models were timed in 4 sessions and FP32 latency varied from {lat[0]:.1f} to {lat[-1]:.1f}\\,ms between them, "
+      f"Models were timed in {len(SRC)} sessions and FP32 latency varied from {lat[0]:.1f} to {lat[-1]:.1f}\\,ms between them, "
       "so speed-up and $\\Delta$Energy are computed against the FP32 model timed in the same session: "
       "compare those rather than absolute latencies.")
     w("\\item \\textit{Environment.} Per 1{,}000 images at 1 thread. Energy is a CodeCarbon estimate (no hardware "
@@ -493,6 +497,7 @@ def table_seeds():
         ("FP32 baseline (single model)", [get("Q", "fp32")], None),
         ("FP32 control (baseline + 10 ep.)", control, None),
         ("Static PTQ (W8A8), 3 calibration sets", ptq_seed_rows(), None),
+        ("QAT (W8A8)", [get("QS", n) for n in QAT_RUNS], None),
         ("Unstructured pruning, 70\\% zeroed", [get("U", f"sparse70_seed{s}") for s in SEEDS], control),
         ("Filter pruning, 10\\% of filters", [get("F", f"pruned10_seed{s}") for s in SEEDS], control),
     ]

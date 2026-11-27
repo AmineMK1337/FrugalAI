@@ -29,7 +29,7 @@ Loss & \multicolumn{3}{>{\raggedright\arraybackslash}p{\dimexpr\linewidth-2.3cm-
 Augmentation & \multicolumn{3}{>{\raggedright\arraybackslash}p{\dimexpr\linewidth-2.3cm-2\tabcolsep\relax}@{}}{Rotation $\pm$180$^\circ$; random resized crop (scale 0.6--1.0, ratio 0.75--1.33); horizontal and vertical flips ($p=0.5$); colour jitter (brightness and contrast 0.2, saturation 0.15, hue 0.02)} \\
 BatchNorm & Trained & Trained (block pruning: re-estimated on 2{,}000 training images first) & Trained until ep.\ 7, then frozen; quantizer ranges frozen from ep.\ 8 \\
 Checkpoint kept & Lowest validation loss (epoch 19) & Highest validation macro F1 & Last epoch (no selection) \\
-Seeds & 42 & 42 (+1, 2 for control, filter 10\%, unstructured 70\%) & 42 \\
+Seeds & 42 & 42 (+1, 2 for control, filter 10\%, unstructured 70\%) & 42, 1, 2 \\
 Hardware & \multicolumn{3}{>{\raggedright\arraybackslash}p{\dimexpr\linewidth-2.3cm-2\tabcolsep\relax}@{}}{NVIDIA A40 (24\,GB), PyTorch 2.12} \\
 GPU time & 17.9 min & $\approx$3.3 min per run & 5.0 min \\
 \bottomrule
@@ -82,8 +82,8 @@ Block pruning & Whole residual blocks replaced by identity: shallower network. &
 \multicolumn{20}{l}{\textit{Quantization (INT8)}} \\
 \quad Weight-only PTQ, per-tensor$^{a}$ & 81.3 & 71.1 & 70.6 & 96.1 & 70.2 & 96.0$^{\ast}$ & 69.4 & \textbf{11.29} & \textbf{3.97} & 11.18 & 3.64 & 51.0 & 0.99 & 14.7 & 75 & 79.7 & 3.38 & 0 & 1.90 \\
 \quad Weight-only PTQ, per-channel$^{a}$ & 82.7 & 70.6 & 73.3 & 96.1 & 71.0 & 96.4$^{\ast}$ & 64.7 & 11.31 & 3.96 & 11.18 & 3.64 & 50.8 & 1.00 & 14.9 & 74 & 78.4 & 3.31 & $-$2 & 1.86 \\
-\quad Static PTQ (W8A8)$^{\dagger}$ & 82.1 & 71.4 & 72.2 & 96.2 & 70.7 & 96.4 & 66.3 & 11.32 & 3.96 & 11.18 & 3.64 & \textbf{6.8} & \textbf{7.47} & \textbf{2.1} & \textbf{580} & 53.0 & \textbf{0.45} & \textbf{$-$87} & \textbf{0.25} \\
-\quad QAT (W8A8) & 82.7 & 71.0 & 74.7 & 96.3 & 71.2 & \textbf{96.6} & 73.4$^{\ast}$ & 11.32 & 3.96 & 11.18 & 3.64 & \textbf{6.8} & 7.42 & \textbf{2.1} & 577 & 52.9 & \textbf{0.45} & \textbf{$-$87} & 0.26 \\
+\quad Static PTQ (W8A8)$^{\dagger}$ & 82.1 & 71.4 & 72.2 & 96.2 & 70.7 & 96.4 & 66.3 & 11.32 & 3.96 & 11.18 & 3.64 & \textbf{6.8} & 7.47 & \textbf{2.1} & \textbf{580} & 53.0 & \textbf{0.45} & \textbf{$-$87} & \textbf{0.25} \\
+\quad QAT (W8A8)$^{\dagger}$ & 82.7 & 70.9 & 74.8 & 96.3 & 71.4 & \textbf{96.5} & 73.0 & 11.32 & 3.96 & 11.18 & 3.64 & \textbf{6.8} & \textbf{7.52} & \textbf{2.1} & 579 & 52.9 & \textbf{0.45} & \textbf{$-$87} & 0.26 \\
 \addlinespace[2pt]
 \multicolumn{20}{l}{\textit{Unstructured pruning (weights zeroed)$^{b}$, after fine-tuning}} \\
 \quad 30\% of weights zeroed & 82.8 & 72.6 & 73.6 & 96.1 & 72.4 & 96.2 & 69.9 & 44.82 & 1.00 & 11.18 & 3.64 & 50.9 & 1.00 & 14.7 & 78 & 76.5 & 3.32 & $-$2 & 1.87 \\
@@ -108,7 +108,7 @@ Block pruning & Whole residual blocks replaced by identity: shallower network. &
 \begin{tablenotes}[flushleft]
 \scriptsize
 \item \textit{How to read.} Bal.\ Acc.\ = macro recall; Mel.\ Rec.\ = melanoma recall. 95\% CIs are about $\pm$4 points on macro F1, so 1--2 point differences without $^{\ast}$ are not meaningful. For averaged rows ($^{\dagger}$), $^{\ast}$ means significant in all 3 runs in the same direction; per-run spread is in Table~\ref{tab:seed-robustness}. Static PTQ efficiency is measured on the seed-42 model (the 3 calibrations give the same architecture).
-\item \textit{Speed.} Lat.: batch 1, median of 200 runs (30 warm-up), median of 3 interleaved repeats, at 1 thread (1T) and 4 threads (4T). Thr.: batch 32. Peak RAM: memory increase while loading and warming up. GFLOPs are counted on the FP32 graph for every model (INT8 runs the same operations in INT8). Models were timed in 4 sessions and FP32 latency varied from 50.7 to 54.0\,ms between them, so speed-up and $\Delta$Energy are computed against the FP32 model timed in the same session: compare those rather than absolute latencies.
+\item \textit{Speed.} Lat.: batch 1, median of 200 runs (30 warm-up), median of 3 interleaved repeats, at 1 thread (1T) and 4 threads (4T). Thr.: batch 32. Peak RAM: memory increase while loading and warming up. GFLOPs are counted on the FP32 graph for every model (INT8 runs the same operations in INT8). Models were timed in 5 sessions and FP32 latency varied from 50.7 to 54.0\,ms between them, so speed-up and $\Delta$Energy are computed against the FP32 model timed in the same session: compare those rather than absolute latencies.
 \item \textit{Environment.} Per 1{,}000 images at 1 thread. Energy is a CodeCarbon estimate (no hardware power counter; about 250\,W per active thread assumed), so it follows run time; differences below about 5\% are noise. CO$_2$e: Tunisian grid, 564\,g\,CO$_2$e/kWh.
 \item[a] Weights are INT8 on disk only; they are converted back to FP32 when loaded, so speed and energy do not change (by design).
 \item[b] Zeros are still stored and computed, hence no gain in size or speed. Non-zero parameters: 7.83/5.59/3.36/1.13\,M; gzip-compressed file: 32.0/24.3/16.2/7.2\,MB (FP32: 41.6\,MB).
@@ -203,6 +203,7 @@ FP32 control & Fine-tuned (10 ep.)$^{\dagger}$ & \textbf{82.4} & \textbf{73.0} &
 \rowcolor{gray!12} FP32 baseline (single model) & 82.2 & 71.5 & 72.3 & 96.2 & 71.0 & 96.3 & 66.5 & -- \\
 \rowcolor{gray!12} FP32 control (baseline + 10 ep.) & 82.4\,{\tiny$\pm$\,0.5} & 73.0\,{\tiny$\pm$\,1.2} & 73.8\,{\tiny$\pm$\,0.9} & 96.3\,{\tiny$\pm$\,0.2} & 72.3\,{\tiny$\pm$\,1.2} & 96.0\,{\tiny$\pm$\,0.4} & 70.5\,{\tiny$\pm$\,0.6} & -- \\
 Static PTQ (W8A8), 3 calibration sets & 82.1\,{\tiny$\pm$\,0.3} & 71.4\,{\tiny$\pm$\,0.3} & 72.2\,{\tiny$\pm$\,0.7} & 96.2\,{\tiny$\pm$\,0.0} & 70.7\,{\tiny$\pm$\,0.3} & 96.4\,{\tiny$\pm$\,0.0} & 66.3\,{\tiny$\pm$\,1.2} & -- \\
+QAT (W8A8) & 82.7\,{\tiny$\pm$\,0.3} & 70.9\,{\tiny$\pm$\,0.1} & 74.8\,{\tiny$\pm$\,1.9} & 96.3\,{\tiny$\pm$\,0.1} & 71.4\,{\tiny$\pm$\,0.5} & 96.5\,{\tiny$\pm$\,0.2} & 73.0\,{\tiny$\pm$\,2.3} & -- \\
 Unstructured pruning, 70\% zeroed & 83.5\,{\tiny$\pm$\,1.0} & 73.9\,{\tiny$\pm$\,2.4} & 75.6\,{\tiny$\pm$\,1.6} & 96.4\,{\tiny$\pm$\,0.1} & 74.0\,{\tiny$\pm$\,1.9} & 96.1\,{\tiny$\pm$\,0.3} & 69.4\,{\tiny$\pm$\,1.5} & $+$1.7\,{\tiny$\pm$\,1.0} \\
 Filter pruning, 10\% of filters & 82.1\,{\tiny$\pm$\,0.7} & 70.9\,{\tiny$\pm$\,1.8} & 71.6\,{\tiny$\pm$\,0.2} & 96.2\,{\tiny$\pm$\,0.1} & 70.4\,{\tiny$\pm$\,1.0} & 96.2\,{\tiny$\pm$\,0.1} & 72.1\,{\tiny$\pm$\,3.3} & $-$1.9\,{\tiny$\pm$\,2.1} \\
 \bottomrule

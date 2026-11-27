@@ -1,0 +1,2 @@
+model,format,size_mb,gflops,params,weights_prunable,weights_zero,sparsity_pct,params_nonzero,state_dict_dense_mb,state_dict_gzip_mb,latency_median_ms_1t,latency_p95_ms_1t,throughput_img_s_1t,peak_memory_mb_1t,latency_median_ms_4t,latency_p95_ms_4t,throughput_img_s_4t,peak_memory_mb_4t,note
+qat_seed2,fused + TorchScript,11.322509,3.644641294,11180103,,,,,,,6.752102985046804,6.982968997908756,155.57984269825042,52.7265625,2.1102524478919804,2.151880308520049,578.6098056324197,52.640625,"INT8 weights and activations (x86 engine), QAT training seed 2, final model (epoch 10)"

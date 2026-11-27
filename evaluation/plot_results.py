@@ -62,6 +62,9 @@ def add_style(model):
         STYLE[model] = dict(label=f"Whole-block, {k} block{'s' if k > 1 else ''} removed (seed {seed}{extra})",
                             short=f"Blocks\nk={k} s{seed}{extra}", color=BLOCK_COLORS.get(k, "#5544b8"),
                             hatch=BLOCK_HATCHES.get(k, "//"))
+    elif model.startswith("qat_seed"):
+        STYLE[model] = dict(label=f"INT8 QAT (seed {seed})", short=f"INT8\nQAT s{seed}",
+                            color={"1": "#b79ae0", "2": "#5e3a99"}.get(seed, "#8b5cc7"), hatch="...")
     else:
         raise KeyError(f"no plot style for {model}")
 THREADS = (1, 4)

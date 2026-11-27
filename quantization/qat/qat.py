@@ -22,7 +22,11 @@ initialization are hashed before and after the run and must not change.
 Writes quantization/qat/resnet18_qat_int8.pt (TorchScript) and, in results/: settings.json, training_history.{json,csv},
 validation_results.csv (FP32 and QAT), confusion_matrix_QAT.csv, plots/training_curves.{pdf,png}.
 
-Usage: python quantization/qat/qat.py [--plot-only]
+Usage: python quantization/qat/qat.py [--seed N] [--plot-only]
+
+--seed sets the training randomness only (data order, augmentation); the observer initialization always uses the
+seed-42 static-PTQ calibration, so every seed starts from the same INT8 model. Seed 42 writes to the paths above;
+any other seed writes quantization/qat/resnet18_qat_int8_seed<N>.pt and results/seed<N>/.
 """
 import argparse
 import copy
@@ -72,6 +76,7 @@ QAT_INT8 = HERE / "resnet18_qat_int8.pt"
 OUT = HERE / "results"
 ENGINE = "x86"
 N_CALIBRATION, SEED = 1000, 42
+CALIBRATION_SEED = 42  # observer initialization: always the seed-42 static PTQ calibration
 LR, EPOCHS = 1e-5, 10
 ADAPTATION_END, FINETUNE_END = 2, 7  # epochs 1-2 adaptation, 3-7 fine-tuning, 8-10 stabilization
 EVAL_THREADS = 16
@@ -306,7 +311,7 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
 
 def start_from_ptq(config, model, val_batches, y, fp32_ref, classes, device, info):
     """Observer initialization (literal pass, then PTQ ranges) and the check that epoch 0 = static PTQ."""
-    calibration = calibration_subset(config, SEED)
+    calibration = calibration_subset(config, CALIBRATION_SEED)
     ptq = static_ptq_prepared(config.num_classes, calibration)
     ptq_logits = predict(convert(copy.deepcopy(ptq), inplace=False).eval(), val_batches)
     init_observers(model, calibration, device)
@@ -316,7 +321,7 @@ def start_from_ptq(config, model, val_batches, y, fp32_ref, classes, device, inf
     check_quantized(int8)
     epoch0_logits = predict(int8, val_batches)
     saved = pd.read_csv(STATIC / "results/validation_results.csv")
-    saved = saved[saved["seed"] == SEED].iloc[0]
+    saved = saved[saved["seed"] == CALIBRATION_SEED].iloc[0]
     e0 = metrics("e0", epoch0_logits, y, fp32_ref, classes)
     info["epoch0_vs_static_ptq"] = {
         "identical_predictions_pct": float((epoch0_logits.argmax(1) == ptq_logits.argmax(1)).float().mean() * 100),
@@ -328,12 +333,12 @@ def start_from_ptq(config, model, val_batches, y, fp32_ref, classes, device, inf
 
 
 def train(config, val, fp32_ref, classes, device):
-    """QAT, seed 42. Returns (history rows, info, final QAT model on the CPU)."""
+    """QAT with training seed SEED. Returns (history rows, info, final QAT model on the CPU)."""
     y, val_batches = val
     set_seed(SEED)
     train_loader, _, _ = build_dataloaders(config)
     criterion = torch.nn.CrossEntropyLoss(weight=compute_class_weights(train_loader, config.num_classes, device))
-    info = {"seed": SEED}
+    info = {"seed": SEED, "calibration_seed": CALIBRATION_SEED}
     model = qat_prepared(config.num_classes).to(device)
     start_from_ptq(config, model, val_batches, y, fp32_ref, classes, device, info)
 
@@ -395,7 +400,7 @@ def plot_curves(history, fp32_row):
         ax.set_ylabel(ylabel)
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.0), ncol=2, fontsize=9)
-    fig.suptitle("QAT training curves, validation split (seed 42; saved model = epoch 10)", x=0.01, ha="left",
+    fig.suptitle(f"QAT training curves, validation split (seed {SEED}; saved model = epoch {EPOCHS})", x=0.01, ha="left",
                  fontweight="semibold")
     fig.tight_layout()
     (OUT / "plots").mkdir(parents=True, exist_ok=True)
@@ -458,10 +463,10 @@ def main():
         "qconfig_repr": str(get_default_qat_qconfig(ENGINE)), "engine": ENGINE,
         "weights": "INT8 per-channel symmetric (qint8, -128..127)",
         "activations": "INT8 per-tensor affine (quint8, reduce_range=True -> 0..127)",
-        "observer_init": "1,000 stratified training images (seed 42, same as the static PTQ calibration); the "
+        "observer_init": f"1,000 stratified training images (seed {CALIBRATION_SEED}, same as the static PTQ calibration); the "
                          "activation and per-channel weight ranges of a static PTQ calibration on those images are "
                          "copied into the QAT observers, so epoch 0 = static PTQ (checked)",
-        "seed": SEED, "epochs": EPOCHS, "batch_size": config.batch_size,
+        "seed": SEED, "calibration_seed": CALIBRATION_SEED, "epochs": EPOCHS, "batch_size": config.batch_size,
         "optimizer": "Adam", "loss": "CrossEntropyLoss, class weights 'balanced' from the training split",
         "augmentation": config.augmentation,
         "schedule": {
@@ -487,7 +492,13 @@ def main():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--plot-only", action="store_true", help="redraw the training curves from the saved CSVs")
-    if parser.parse_args().plot_only:
+    parser.add_argument("--seed", type=int, default=SEED, help="training seed (default 42)")
+    args = parser.parse_args()
+    if args.seed != SEED:  # other seeds never overwrite the seed-42 outputs
+        SEED = args.seed
+        OUT = HERE / "results" / f"seed{SEED}"
+        QAT_INT8 = HERE / f"resnet18_qat_int8_seed{SEED}.pt"
+    if args.plot_only:
         plot_from_saved()
         sys.exit(0)
     try:
