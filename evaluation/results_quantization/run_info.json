@@ -17,7 +17,6 @@
     "weight_only_per_channel": "dequantized to FP32, then as fp32",
     "weight_only_per_tensor": "dequantized to FP32, then as fp32",
     "ptq_static": "saved fused INT8 TorchScript (torch.jit.script), loaded as is",
-    "qat": "saved fused INT8 TorchScript (torch.jit.script), loaded as is",
     "pruned / control": "whole saved FP32 module (pruning/structured/filter/models), fuse_model(), torch.jit.trace",
     "sparse": "whole saved FP32 module with exact zeros (pruning/unstructured/models), fuse_model(), torch.jit.trace; dense kernels",
     "blocks": "whole saved FP32 module with residual blocks replaced by nn.Identity (pruning/structured/block/models), fuse_model(), torch.jit.trace"
@@ -26,8 +25,7 @@
     "fp32",
     "weight_only_per_channel",
     "weight_only_per_tensor",
-    "ptq_static",
-    "qat"
+    "ptq_static"
   ],
   "fused_vs_unfused_check": [
     {
@@ -80,8 +78,8 @@
     "weight_only_per_channel": "ccc121339016ec14765c77bc5236235502ce826118a1bbe7e74d0dcc85cb0816",
     "weight_only_per_tensor": "376a5aa4575fbd3c786722597909e2afc830c4aab97ee977bcc0ec643d12bbfb",
     "ptq_static": "c39e9d50643b3ade45ee173df8c758fbf03dcddbe690f9a8ea3746872eeeb3bb",
-    "qat": "e4dcd792247bffbc4bc529c13c6620623901a12e28038cb003c3f58f04ceabe1",
     "split_csv": "d7b17a1900f233db66a2e76d66eea333863404c53ea4fa2c154dbecd6cfe4f82",
     "config": "da7f6b852cd0d4a6d7715ee26a768c614f7cab1b14af562546360a9f4409f73e"
-  }
+  },
+  "note": "QAT was removed from this run on 2026-11-28. It is evaluated with three training seeds (42, 1, 2) in quantization/qat/results/evaluation_seeds/."
 }

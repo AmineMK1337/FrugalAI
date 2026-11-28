@@ -63,7 +63,7 @@ Each run's folder in [resnet18_finetunning/results/](resnet18_finetunning/result
 
 ## 5. Evaluation machine and thread protocol
 
-All five models (FP32 baseline, weight-only INT8 per-channel, weight-only INT8 per-tensor, INT8 static PTQ, INT8 QAT) are evaluated by [evaluation/evaluate.py](evaluation/evaluate.py) on the same validation images, on the same machine, on the CPU only, and in the same format, so the only difference between models is the precision (FP32 or INT8). The exact settings and file hashes of each run are saved in [evaluation/results_quantization/run_info.json](evaluation/results_quantization/run_info.json).
+All five models (FP32 baseline, weight-only INT8 per-channel, weight-only INT8 per-tensor, INT8 static PTQ, INT8 QAT) are evaluated by [evaluation/evaluate.py](evaluation/evaluate.py) on the same validation images, on the same machine, on the CPU only, and in the same format, so the only difference between models is the precision (FP32 or INT8). The exact settings and file hashes of each run are saved in [evaluation/results_quantization/run_info.json](evaluation/results_quantization/run_info.json) (FP32, weight-only and static PTQ) and [quantization/qat/results/evaluation_seeds/run_info.json](quantization/qat/results/evaluation_seeds/run_info.json) (QAT, three training seeds, with FP32 re-measured in the same session).
 
 ### The virtual machine
 
@@ -109,7 +109,7 @@ To rerun the evaluation (validation split):
 python evaluation/evaluate.py
 ```
 
-Results and plots are written to `evaluation/results/` by default (the quantization results are kept in [evaluation/results_quantization/](evaluation/results_quantization/)), by model (`fp32`, `weight_only_per_channel`, `weight_only_per_tensor`, `ptq_static`, `qat`) and metric type (`performance`, `efficiency`, `environment`), with cross-model comparisons in `comparison/`. Every quantized model is compared with FP32: its plots show FP32 next to it, `performance/change_vs_fp32` shows each metric's change with a paired-bootstrap CI and p-value, and each metric folder has a `vs_fp32_<split>.csv` table. Performance metrics are accuracy, balanced accuracy (= macro recall), precision, specificity, F1, AUC (macro) and melanoma recall, each with a 95% bootstrap CI.
+Results and plots are written to `evaluation/results/` by default (the quantization results are kept in [evaluation/results_quantization/](evaluation/results_quantization/), and QAT in [quantization/qat/results/evaluation_seeds/](quantization/qat/results/evaluation_seeds/)), by model (`fp32`, `weight_only_per_channel`, `weight_only_per_tensor`, `ptq_static`; `qat`, `qat_seed1`, `qat_seed2`) and metric type (`performance`, `efficiency`, `environment`), with cross-model comparisons in `comparison/`. Every quantized model is compared with FP32: its plots show FP32 next to it, `performance/change_vs_fp32` shows each metric's change with a paired-bootstrap CI and p-value, and each metric folder has a `vs_fp32_<split>.csv` table. Performance metrics are accuracy, balanced accuracy (= macro recall), precision, specificity, F1, AUC (macro) and melanoma recall, each with a 95% bootstrap CI.
 
 `--models` picks which models to evaluate and `--results-dir` where to write them. The pruned models are evaluated this way in their own session, with FP32 re-measured there as the timing reference (section 8). FLOPs and parameters are counted on each model's own architecture.
 
@@ -126,7 +126,7 @@ Results and plots are written to `evaluation/results/` by default (the quantizat
 
 **Starting point.** The observers (which set the INT8 scales) are initialized on 1,000 training images, so training starts from a working INT8 model.
 
-**3-phase schedule, 10 epochs, seed 42.** Weights train in every phase, with class-weighted cross-entropy, strong augmentation, batch 32 and Adam.
+**3-phase schedule, 10 epochs, training seeds 42, 1 and 2** (`--seed`; every seed starts from the same seed-42 static-PTQ ranges, so only the training randomness differs). Weights train in every phase, with class-weighted cross-entropy, strong augmentation, batch 32 and Adam.
 
 | Epochs | Phase | Learning rate | BatchNorm statistics | Observers (scales, zero points) |
 |---|---|---|---|---|
@@ -134,11 +134,18 @@ Results and plots are written to `evaluation/results/` by default (the quantizat
 | 3–7 | Fine-tuning | cosine decay from 1e-5 | updating | updating |
 | 8–10 | Stabilization | cosine continues toward 0 | frozen | disabled |
 
-**Saved model.** [resnet18_qat_int8.pt](quantization/qat/) is the final model (epoch 10); no epoch is picked on validation. Per-epoch logs, the training curves and the settings are in [quantization/qat/results/](quantization/qat/results/).
+**Saved models.** [resnet18_qat_int8.pt](quantization/qat/) (seed 42), `resnet18_qat_int8_seed1.pt` and `resnet18_qat_int8_seed2.pt` are the final models (epoch 10); no epoch is picked on validation. Per-epoch logs, the training curves and the settings are in [quantization/qat/results/](quantization/qat/results/) (seed 42) and its `seed1/` and `seed2/` folders.
+
+The three QAT models are evaluated together with FP32 in their own session:
+
+```
+python evaluation/evaluate.py --models fp32 qat qat_seed1 qat_seed2 --results-dir quantization/qat/results/evaluation_seeds
+python quantization/qat/plot_latency.py   # latency summary figure
+```
 
 ## 7. Results: FP32 baseline vs quantized models (validation set, 1,532 images)
 
-From [evaluation/results_quantization/comparison/](evaluation/results_quantization/comparison/), CPU, fused + TorchScript, latency at 1 thread (main protocol).
+From [evaluation/results_quantization/comparison/](evaluation/results_quantization/comparison/) and, for QAT, [quantization/qat/results/evaluation_seeds/comparison/](quantization/qat/results/evaluation_seeds/comparison/) (mean of training seeds 42, 1, 2; speed-up and energy against the FP32 model re-measured in that session). CPU, fused + TorchScript, latency at 1 thread (main protocol).
 
 | Model | Accuracy | Macro F1 | Melanoma recall | Size (MB) | Latency (ms), 1 / 4 threads | Speed-up, 1 / 4 threads | Peak RAM vs FP32 | Energy / 1,000 images (Wh, estimate) |
 |---|---|---|---|---|---|---|---|---|
@@ -146,13 +153,13 @@ From [evaluation/results_quantization/comparison/](evaluation/results_quantizati
 | Weight-only INT8, per-channel | 82.70 | 71.03 | 64.74 | 11.31 | 50.80 / 14.86 | 1.00× / 0.98× | +1.5% | 3.31 |
 | Weight-only INT8, per-tensor | 81.27 | 70.22 | 69.36 | 11.29 | 50.97 / 14.71 | 0.99× / 1.00× | +3.2% | 3.38 |
 | INT8 static PTQ | 82.44 | 70.72 | 65.90 | 11.32 | 6.79 / 2.13 | 7.47× / 6.88× | −31.5% | 0.45 (−87%) |
-| INT8 QAT | 82.70 | 71.18 | 73.41 | 11.32 | 6.84 / 2.11 | 7.42× / 6.95× | −31.6% | 0.45 (−87%) |
+| INT8 QAT (mean of 3 seeds) | 82.66 | 71.36 | 73.03 | 11.32 | 6.76 / 2.10 | 7.52× / 7.05× | −32.0% | 0.45 (−87%) |
 
 - **Weight-only INT8** makes the file 4× smaller with no significant change in accuracy or macro F1 (paired bootstrap, p ≥ 0.05). It gives no speed or energy gain, because the weights are dequantized back to FP32 when the model loads and the computation stays in FP32.
 - **INT8 static PTQ** computes in INT8 with no training at all, only calibration on 1,000 training images: 4× smaller, 7.5× faster at 1 thread (6.9× at 4 threads), −31% peak RAM and an estimated −87% energy. Macro F1 −0.32 points (95% CI −2.22 to +1.47, p = 0.69) and melanoma recall −0.58 (p = 0.79): no significant change.
-- **INT8 QAT** has the same runtime as static PTQ (same INT8 graph). Accuracy and macro F1 equal FP32 within noise (+0.52 and +0.14 points, p = 0.40 and 0.90). Melanoma recall is +6.94 points (95% paired-bootstrap CI +2.4 to +11.3). That gain comes from one training run (seed 42) and moves a lot from epoch to epoch (64–74% across epochs 1–10), so it needs to be confirmed on the test set. Static PTQ already keeps macro F1, so the 10 epochs of QAT only buy this melanoma-recall gain, which is not yet established.
+- **INT8 QAT** has the same runtime as static PTQ (same INT8 graph): 7.5× faster at 1 thread, the same for all three seeds (medians 6.75–6.77 ms; figure: [latency_summary_validation.png](quantization/qat/results/evaluation_seeds/latency_summary_validation.png)). Over three training seeds, accuracy and macro F1 equal FP32 within noise (macro F1 71.36 ± 0.53 vs 71.04; not significant in any seed, p ≥ 0.55). Melanoma recall is higher in every seed (73.41, 75.14, 70.52 vs 66.47; significant for seeds 42 and 1, p = 0.07 for seed 2). The gain comes from QAT predicting melanoma more often (melanoma AUC unchanged), and its size depends on the seed, so it still needs to be confirmed on the test set.
 
-All five models were re-measured in one session (with static PTQ added); the numbers differ from the previous session by at most 0.1 ms in latency.
+FP32, weight-only and static PTQ were measured in one session; QAT was re-measured with its three seeds in a separate session (FP32 latency 50.71 ms vs 50.85 ms between the two).
 
 ### Why 8-bit weights lose almost nothing: bit-width sweep
 
@@ -302,7 +309,7 @@ Pruned − control above uses each model's selected epoch (CPU evaluation). At e
 - Paired bootstrap of each pruned model against its control (inference only), to give pruned − control a confidence interval (the "not available" cells of comparison 3).
 - Quantize the pruned models to combine both techniques: filter pruning + static INT8 PTQ for speed (no extra training needed), unstructured sparsity + INT8 for compressed size.
 - Longer fine-tuning after structured pruning; iterative pruning (prune a little, fine-tune, repeat) instead of one-shot.
-- More seeds for the melanoma recall of QAT (it varies a lot between epochs).
+- Confirm QAT's melanoma-recall gain on the test set (higher in all three seeds on validation, but its size depends on the seed: +4.0 to +8.7 points).
 - Once every model is final, evaluate all of them once on the held-out test set (`python evaluation/evaluate.py --split test`).
 
 ## Reproduce

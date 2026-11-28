@@ -12,7 +12,7 @@ Validation split only (the test set is never loaded). Nothing is trained or save
 Writes results/bitwidth_sweep/: bitwidth_sweep.csv (one row per scheme and bit width; 95% bootstrap CIs) and
 bitwidth_sweep.{png,pdf}.
 
-Usage: python quantization/ptq/weight_only/bitwidth_sweep.py
+Usage: python quantization/ptq/weight_only/bitwidth_sweep.py [--plot-only]
 """
 import os
 import sys
@@ -137,55 +137,71 @@ def plot(table):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 10, "axes.grid": True, "grid.color": "#e5e5e5",
-                         "axes.spines.top": False, "axes.spines.right": False, "legend.frameon": False,
-                         "pdf.fonttype": 42})
+    ink, muted, grid = "#1f1e1c", "#5f6368", "#e6e6e6"
+    plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 10, "axes.spines.top": False,
+                         "axes.spines.right": False, "legend.frameon": False, "pdf.fonttype": 42,
+                         "axes.edgecolor": "#b0b0b0", "xtick.color": ink, "ytick.color": muted})
     fp32 = table[table["scheme"] == "fp32"].iloc[0]
     x_of = {b: i for i, b in enumerate(BITS)}  # equally spaced slots, 32 bits on the left
-    style = {"per_channel": dict(color="#eb6834", marker="o", linestyle="-", label="INT per-channel"),
-             "per_tensor": dict(color="#1baf7a", marker="s", linestyle="--", markerfacecolor="white",
-                                label="INT per-tensor")}
-    float_style = {"fp16": dict(color="#1f1e1c", marker="^", label="FP16 (float)"),
-                   "bf16": dict(color="#8b5cc7", marker="D", markerfacecolor="white", label="BF16 (float)")}
-    panels = [("accuracy", "Accuracy (%)", True), ("f1_macro", "Macro F1 (%)", True),
-              ("melanoma_recall", "Melanoma recall (%)", True),
-              ("identical_to_fp32_pct", "Predictions identical to FP32 (%)", False),
-              ("weight_relative_rms_error_pct", "Weight error (relative RMS, %)", False)]
-    fig, axes = plt.subplots(5, 1, figsize=(12, 19))
-    for ax, (col, ylabel, with_ci) in zip(axes, panels):
+    float_x = -1.6  # FP16 / BF16 get their own slot left of the integer sweep
+    # colours checked with the dataviz palette validator; markers and line style also tell the schemes apart
+    style = {"per_channel": dict(color="#f47230", marker="o", linestyle="-", label="INT, per-channel scale"),
+             "per_tensor": dict(color="#00a383", marker="s", linestyle="--", markerfacecolor="white",
+                                label="INT, per-tensor scale")}
+    float_style = {"fp16": dict(color=ink, marker="^", label="FP16 (16-bit float)"),
+                   "bf16": dict(color="#6b5bb8", marker="D", markerfacecolor="white", label="BF16 (16-bit float)")}
+    panels = [("f1_macro", "Macro F1 (main metric)", "%", True),
+              ("melanoma_recall", "Melanoma recall", "%", True),
+              ("accuracy", "Accuracy (misleading at 2-4 bits: the model predicts the majority class, nv, "
+                           "for almost every image)", "%", True),
+              ("identical_to_fp32_pct", "Predictions identical to FP32", "%", False)]
+    # the weight rounding error is still saved in bitwidth_sweep.csv (weight_relative_rms_error_pct)
+    fig, axes = plt.subplots(len(panels), 1, figsize=(12, 16), sharex=True)
+    fig.subplots_adjust(top=0.885, bottom=0.08, hspace=0.55, left=0.08, right=0.98)
+    for ax, (col, title, unit, with_ci) in zip(axes, panels):
         scale = 100 if with_ci else 1
+        ax.axvspan(x_of[8] - 0.45, x_of[8] + 0.45, color="#ececec", zorder=0)
         for scheme, st in style.items():
             t = table[table["scheme"] == scheme].copy()
             t["x"] = t["bits"].map(x_of)
             t = t.sort_values("x")
             if with_ci:
                 ax.fill_between(t["x"], t[f"{col}_ci_low"] * scale, t[f"{col}_ci_high"] * scale,
-                                color=st["color"], alpha=0.12, linewidth=0)
-            ax.plot(t["x"], t[col] * scale, linewidth=2, markersize=6, **st)
+                                color=st["color"], alpha=0.13, linewidth=0, zorder=1)
+            ax.plot(t["x"], t[col] * scale, linewidth=2, markersize=6, zorder=3, **st)
         for k, (scheme, st) in enumerate(float_style.items()):
             r = table[table["scheme"] == scheme].iloc[0]
-            ax.plot(x_of[16] + (k - 0.5) * 0.35, r[col] * scale, linestyle="none", markersize=8, zorder=4, **st)
-        if col == "weight_relative_rms_error_pct":
-            ax.set_yscale("log")
-        else:
-            ax.axhline(fp32[col] * scale, color="#2a78d6", linewidth=1.3, linestyle=(0, (1, 1)),
-                       label="FP32 baseline (32-bit float)")
-        ax.axvspan(x_of[8] - 0.5, x_of[8] + 0.5, color="#dcdcdc", zorder=0)
-        ax.set_xticks(range(len(BITS)), BITS)
-        ax.set_xlim(-0.6, len(BITS) - 0.4)
-        ax.set_ylabel(ylabel)
-    axes[-1].set_xlabel("Bits per weight (equally spaced; fewer bits to the right)")
+            ax.plot(float_x + (k - 0.5) * 0.5, r[col] * scale, linestyle="none", markersize=8, zorder=4, **st)
+        ax.axvline(-0.8, color="#b0b0b0", linewidth=1, linestyle=(0, (4, 3)))
+        ax.axhline(fp32[col] * scale, color="#257de0", linewidth=1.4, linestyle=(0, (1, 1.5)), zorder=2,
+                   label="FP32 baseline")
+        ax.set_title(title, loc="left", fontsize=11, fontweight="bold", color=ink, pad=6)
+        ax.set_ylabel(unit, color=muted)
+        ax.grid(color=grid, linewidth=0.8)
+        ax.set_axisbelow(True)
+        ax.tick_params(length=0, labelbottom=True)  # bit labels under every panel (each can stand alone on a slide)
+        ax.set_xlabel("Bits per weight", color=muted, fontsize=9, labelpad=2)
+    top = axes[0]
+    top.text(x_of[8], 1.02, "INT8\n(saved models)", transform=top.get_xaxis_transform(), ha="center", va="bottom",
+             fontsize=8.5, color=muted)
+    axes[-1].set_xticks([float_x] + list(range(len(BITS))), ["FP16\nBF16"] + [str(b) for b in BITS])
+    axes[-1].set_xlim(float_x - 0.6, len(BITS) - 0.4)
+    axes[-1].set_xlabel("Bits per weight  (integer formats, equally spaced; fewer bits to the right)", color=ink)
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, -0.015), ncol=5, fontsize=9)
-    fig.suptitle("Weight-only quantization: bit-width sweep, 32 to 2 bits (validation split, 1,532 images)",
-                 x=0.01, ha="left", fontweight="semibold")
-    fig.text(0.01, -0.03, "Shaded bands: 95% bootstrap CI (1,000 resamples). Grey column: 8 bits (the saved INT8 "
-             "models). Weights only; activations and computation stay FP32.", fontsize=8, color="#555555")
-    fig.tight_layout()
+    fig.legend(handles, labels, loc="upper left", bbox_to_anchor=(0.075, 0.955), ncol=5, fontsize=9.5)
+    fig.text(0.08, 0.975, "Weight-only quantization: performance holds down to 7 bits and collapses at 4 bits",
+             fontsize=14, fontweight="bold", color=ink, va="bottom")
+    fig.text(0.08, 0.02, "Validation split (1,532 images). Shaded bands: 95% bootstrap CI (1,000 resamples). "
+             "Grey column: 8 bits, the saved INT8 models.\nOnly the weights are quantized; activations and "
+             "computation stay FP32. nv is 66% of the validation images, so predicting only nv already gives "
+             "66% accuracy.", fontsize=8.5, color=muted)
     fig.savefig(OUT / "bitwidth_sweep.png", dpi=300, bbox_inches="tight")
     fig.savefig(OUT / "bitwidth_sweep.pdf", bbox_inches="tight")
     plt.close(fig)
 
 
 if __name__ == "__main__":
-    main()
+    if "--plot-only" in sys.argv:  # redraw the figure from the saved CSV, without rerunning the sweep
+        plot(pd.read_csv(OUT / "bitwidth_sweep.csv"))
+    else:
+        main()
